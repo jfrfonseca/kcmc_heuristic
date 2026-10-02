@@ -15,7 +15,7 @@ services:
       - ./src:/app/src:ro
       - ./builds:/app/builds:rw
 
-  generator:
+  instance_generator:
     # Instances generator
     profiles:
       - generator

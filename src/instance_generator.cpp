@@ -33,6 +33,9 @@ void help(int argc, char* const argv[]) {
     std::cout << "seed is an integer number that is used as seed of the PRNG." << std::endl;
     std::cout << "++ If more than one seed is provided, many instances will be generated" << std::endl;
     std::cout << "++ If a single instance is provided, its de-serialization will be tested" << std::endl;
+    std::cout << "There is also fail-safe mode when the seed is 0" << std::endl;
+    std::cout << "./instance_generator <p> <s> <k> <area_s> <cov_v> <com_r> 0 <kcmc_k> <kcmc_m>" << std::endl;
+    std::cout << "In this case, the program will generate an instance using the fail-safe mode with the specified <kcmc_k> and <kcmc_m>" << std::endl;
     exit(0);
 }
 
@@ -46,7 +49,7 @@ int main(int argc, char* const argv[]) {
      * ======================== */
 
     /* Prepare Buffers */
-    int i, num_pois, num_sensors, num_sinks, area_side, coverage_radius, communication_radius, success, k, m;
+    int i, num_pois, num_sensors, num_sinks, area_side, coverage_radius, communication_radius, success, kcmc_k, kcmc_m;
     long long random_seed, previous_seed;
     std::unordered_set<int> emptyset, ignoredset;
 
@@ -73,8 +76,8 @@ int main(int argc, char* const argv[]) {
         if (random_seed == 0) {
 
             // Read K and M
-            k = atoi(argv[i+1]);
-            m = atoi(argv[i+2]);
+            kcmc_k = atoi(argv[i+1]);
+            kcmc_m = atoi(argv[i+2]);
             i += 2;
 
             // Start from the last random seed
@@ -86,12 +89,12 @@ int main(int argc, char* const argv[]) {
                 auto *instance = new KCMC_Instance(num_pois, num_sensors, num_sinks,
                                                    area_side, coverage_radius, communication_radius,
                                                    random_seed);
-                success = instance->fast_k_coverage(k, emptyset);
+                success = instance->fast_k_coverage(kcmc_k, emptyset);
                 if (success == -1) {
-                    success = instance->fast_m_connectivity(m, emptyset, &ignoredset);
+                    success = instance->fast_m_connectivity(kcmc_m, emptyset, &ignoredset);
                     if (success == -1) {
-                        //printf("%s | (K%dM%d)\n", instance->serialize().c_str(), k, m);
-                        printf("KCMC;%s;END | (K%dM%d)\n", instance->key().c_str(), k, m);
+                        //printf("%s | (K%dM%d)\n", instance->serialize().c_str(), kcmc_k, kcmc_m);
+                        printf("KCMC;%s;END | (K%dM%d)\n", instance->key().c_str(), kcmc_k, kcmc_m);
                         previous_seed = random_seed + std::abs((rand() % 100000)) + 7;
                         break;
                     }
@@ -99,7 +102,7 @@ int main(int argc, char* const argv[]) {
                 random_seed++;
             }
             if (success != -1) {printf("UNABLE TO GENERATE VALID INSTANCE WITH PARAMETERS %d %d %d %d %d %d 0 %d %d\n",
-                                       num_pois, num_sensors, num_sinks, area_side, coverage_radius, communication_radius, k, m);}
+                                       num_pois, num_sensors, num_sinks, area_side, coverage_radius, communication_radius, kcmc_k, kcmc_m);}
         } else {
             // FAIL-PRONE MODE
             try {

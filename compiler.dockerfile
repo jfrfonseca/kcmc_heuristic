@@ -1,5 +1,5 @@
-# USING DEBIAN 10 "Buster" OS
-FROM gcc:10.3-buster
+# USING DEBIAN 13.7 "Trixie" OS
+FROM gcc:16.2-trixie
 
 # INSTALL DEPS & CLEANUP
 RUN apt -y update \

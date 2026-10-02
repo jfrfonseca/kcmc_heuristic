@@ -1,5 +1,5 @@
-# USING DEBIAN 11 "Bull's Eye" OS
-FROM python:bullseye
+# USING DEBIAN 13.7 "Trixie" OS
+FROM python:trixie
 
 # Install GNU PARALLEL & CLEANUP
 RUN apt -y update \
