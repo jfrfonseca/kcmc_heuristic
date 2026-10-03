@@ -20,6 +20,8 @@
 #define INSPECTION_FREQUENCY 100
 #define WORST_FITNESS 9999999999
 
+void exit_signal_handler(int signal);
+
 
 /* NODE
  * Basic building block of the KCMC Instance. Contains its type (poi, sensor, sink), index (in array) and dinic level
@@ -195,7 +197,7 @@ class KCMC_Instance {
 
         /* Other useful information about the instance
          */
-        int level_graph(int level_graph[], std::unordered_set<int> &inactive_sensors);
+        int level_graph(std::vector<int> &level_graph, std::unordered_set<int> &inactive_sensors);
         void get_placements(Placement *pl_pois, Placement *pl_sensors, Placement *pl_sinks);
 
     private:
@@ -203,7 +205,7 @@ class KCMC_Instance {
         void regenerate();
         int parse_edge(int stage, const std::string& token);
         int find_path(int poi_number, std::unordered_set<int> &used_sensors,
-                      int level_graph[], int predecessors[]);
+                      std::vector<int> &level_graph, std::vector<int> &predecessors);
 };
 
 #endif

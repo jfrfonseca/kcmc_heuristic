@@ -8,8 +8,10 @@
 
 // Dependencies from this package
 #include "kcmc_instance.h"  // KCMC Instance class headers
-#include "genetic_algorithm_operators.h"  // exit_signal_handler
 
+// Constants to improve readability
+constexpr int UNVISITED_SENSOR = -2;
+constexpr int INVALID_PREVIOUS_POI = -1;
 
 /** LOCAL OPTIMA DINIC ALGORITM
  * Get a set of sensors from the instance that has k-coverage and m-connectivity using the Dinic algorithm, a simple
@@ -45,13 +47,12 @@ int KCMC_Instance::flood(int k, int m, bool full,
                          std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors) {
 
     // Base case
-    if (m < 1){return -1;}
+    if (m < 1){return INVALID_PREVIOUS_POI;}
 
     // Create the level graph, loop controls and buffers
     bool break_loop;
-    int level_graph[this->num_sensors], predecessors[this->num_sensors],
-        paths_found, path_end, a_poi, path_length, longest_required_path_length, previous, next_i,
-        total_paths_found = 0;
+    int paths_found, path_end, a_poi, path_length, longest_required_path_length, previous, next_i, total_paths_found = 0;
+    std::vector<int> level_graph(this->num_sensors), predecessors(this->num_sensors);
 
     // Update the level graph
     this->level_graph(level_graph, inactive_sensors);
@@ -60,7 +61,7 @@ int KCMC_Instance::flood(int k, int m, bool full,
     std::unordered_set<int> used_sensors;
 
     // Validate K-Coverage
-    if (this->fast_k_coverage(k, inactive_sensors, &used_sensors) != -1) {
+    if (this->fast_k_coverage(k, inactive_sensors, &used_sensors) != INVALID_PREVIOUS_POI) {
         throw std::runtime_error("INVALID INSTANCE! (INSUFFICIENT COVERAGE)");
     }
 
@@ -82,14 +83,14 @@ int KCMC_Instance::flood(int k, int m, bool full,
         used_sensors = inactive_sensors;  // Reset the set of used sensors for each POI
 
         // While the stopping criteria was not found
-        while (not break_loop) {
-            std::fill(predecessors, predecessors+this->num_sensors, -2);  // Reset the predecessors buffer
+        while (!break_loop) {
+            std::fill(predecessors.begin(), predecessors.end(), UNVISITED_SENSOR);  // Reset the predecessors buffer
 
             // Find a path
             path_end = this->find_path(a_poi, used_sensors, level_graph, predecessors);
 
             // If the path ends in an invalid sensor, mark the loop to end. If we do not have enough paths, throw error
-            if (path_end == -1) {
+            if (path_end == INVALID_PREVIOUS_POI) {
                 break_loop = true;
                 if (paths_found < m) { throw std::runtime_error("INVALID INSTANCE! (INSUFFICIENT CONNECTIVITY)"); }
             }
@@ -98,7 +99,7 @@ int KCMC_Instance::flood(int k, int m, bool full,
             else {
 
                 // Reset the control buffers
-                next_i = -1;
+                next_i = INVALID_PREVIOUS_POI;
                 path_length = 0;
 
                 // Increase the counters with the newly found path
@@ -106,20 +107,20 @@ int KCMC_Instance::flood(int k, int m, bool full,
                 total_paths_found += 1;
 
                 // Unravel the path, marking each sensor in it as used and flooding it
-                while (path_end != -1) {
+                while (path_end != INVALID_PREVIOUS_POI) {
                     used_sensors.insert(path_end);
                     path_length += 1;
 
                     // Get the previous sensor in the path
                     previous = predecessors[path_end];
-                    if (previous == -2) { throw std::runtime_error("FORBIDDEN ADDRESS!"); }
+                    if (previous == UNVISITED_SENSOR) { throw std::runtime_error("FORBIDDEN ADDRESS!"); }
 
                     /* If the previous sensor is a POI and the next is a SINK
                      * Add all active sensors that connect both to the POI and the SINK to the result buffer
                      */
-                    if ((previous == -1) and (next_i == -1)) {
+                    if ((previous == INVALID_PREVIOUS_POI) && (next_i == INVALID_PREVIOUS_POI)) {
                         for (const int &bridge: this->poi_sensor[a_poi]) {
-                            if (isin(this->sensor_sink, bridge) and (not isin(inactive_sensors, bridge))) {
+                            if (isin(this->sensor_sink, bridge) && (!isin(inactive_sensors, bridge))) {
                                 vote(*visited_sensors, bridge);
                             }
                         }
@@ -127,9 +128,9 @@ int KCMC_Instance::flood(int k, int m, bool full,
                         /* If the previous sensor is a POI (and the next cannot be a SINK)
                          * Add all active sensors that cover the POI and connect to the path_end sensor to the result
                          */
-                        if (previous == -1) {
+                        if (previous == INVALID_PREVIOUS_POI) {
                             for (const int &cover: this->poi_sensor[a_poi]) {
-                                if (isin(this->sensor_sensor[cover], path_end) and (not isin(inactive_sensors, cover))) {
+                                if (isin(this->sensor_sensor[cover], path_end) && (!isin(inactive_sensors, cover))) {
                                     vote(*visited_sensors, cover);
                                 }
                             }
@@ -137,9 +138,9 @@ int KCMC_Instance::flood(int k, int m, bool full,
                             /* If the previous sensor is NOT a POI and the next IS a SINK
                              * Add all active sensors that connect to both the previous sensor and the sink
                              */
-                            if (next_i == -1) {
+                            if (next_i == INVALID_PREVIOUS_POI) {
                                 for (const int &conn: this->sensor_sensor[previous]) {
-                                    if (isin(this->sensor_sink, conn) and (not isin(inactive_sensors, conn))) {
+                                    if (isin(this->sensor_sink, conn) && (!isin(inactive_sensors, conn))) {
                                         vote(*visited_sensors, conn);
                                     }
                                 }
@@ -148,7 +149,7 @@ int KCMC_Instance::flood(int k, int m, bool full,
                                  * Add all active sensors that connect to both the previous and the next to the result
                                  */
                                 for (const int &conn: this->sensor_sensor[previous]) {
-                                    if (isin(this->sensor_sensor[conn], next_i) and (not isin(inactive_sensors, conn))) {
+                                    if (isin(this->sensor_sensor[conn], next_i) && (!isin(inactive_sensors, conn))) {
                                         vote(*visited_sensors, conn);
                                     }
                                 }
@@ -198,9 +199,9 @@ int KCMC_Instance::reuse(int k, int m, int flood_level,
                          std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors) {
 
     // Local buffers
-    int num_paths, inv_frequency_array[this->num_sensors],
-        paths_found, path_end, a_poi, predecessors[this->num_sensors],
+    int num_paths, paths_found, path_end, a_poi,
         active_covering_sensors, add_sensor, pre_k_cov_sensors;
+    std::vector<int> inv_frequency_array(this->num_sensors), predecessors(this->num_sensors);
     std::priority_queue<LevelNode, std::vector<LevelNode>, CompareLevelNode> queue;
 
     // First we clear out the output buffer
@@ -221,7 +222,7 @@ int KCMC_Instance::reuse(int k, int m, int flood_level,
      * In the IFA, sensors that were found by the flood method have freqeuency num_paths-(orig. frequency)
      * This inversion is done so the minimization loop can still be used
      */
-    std::fill(inv_frequency_array, inv_frequency_array + this->num_sensors, num_paths);
+    std::fill(inv_frequency_array.begin(), inv_frequency_array.end(), num_paths);
     for (const auto &i : *visited_sensors) {inv_frequency_array[i.first] = num_paths - i.second;}
 
     // Prepare the set of "used" sensors and clear the map of visited sensors
@@ -235,21 +236,21 @@ int KCMC_Instance::reuse(int k, int m, int flood_level,
 
         // While there are still paths to be found
         while (paths_found < m) {
-            std::fill(predecessors, predecessors+this->num_sensors, -2);  // Reset the predecessors buffer
+            std::fill(predecessors.begin(), predecessors.end(), UNVISITED_SENSOR);  // Reset the predecessors buffer
 
             // Find a path
             path_end = this->find_path(a_poi, used_sensors, inv_frequency_array, predecessors);
 
             // If the path ends in an invalid sensor, break the loop. Other POIs will fix it
-            if (path_end == -1) {break;}
+            if (path_end == INVALID_PREVIOUS_POI) {break;}
             else {
                 paths_found += 1;  // Count the newfound path
                 // Unravel the path, marking each sensor in it as used
-                while (path_end != -1) {
+                while (path_end != INVALID_PREVIOUS_POI) {
                     used_sensors.insert(path_end);
                     vote(*visited_sensors, path_end);  // Get the complete frequency map of all used sensors
                     path_end = predecessors[path_end];
-                    if (path_end == -2) {throw std::runtime_error("FORBIDDEN ADDRESS!");}
+                    if (path_end == UNVISITED_SENSOR) {throw std::runtime_error("FORBIDDEN ADDRESS!");}
                 }
             }
         }
@@ -260,7 +261,7 @@ int KCMC_Instance::reuse(int k, int m, int flood_level,
      * Update the frequencies to the IFA
      * Increase (thus, subtract from) the frequency of each sensor the number of POIs it covers
      */
-    std::fill(inv_frequency_array, inv_frequency_array + this->num_sensors, num_paths);
+    std::fill(inv_frequency_array.begin(), inv_frequency_array.end(), num_paths);
     for (const auto &i : *visited_sensors) {inv_frequency_array[i.first] = num_paths - i.second;}
     for (const auto &i : this->sensor_poi) {inv_frequency_array[i.first] -= (int)(i.second.size());}
 
@@ -274,7 +275,7 @@ int KCMC_Instance::reuse(int k, int m, int flood_level,
      *     For each added sensor, increase its frequency in the final frequency map of each sensor.
      */
     for (a_poi=0; a_poi < this->num_pois; a_poi++) {
-        while (not queue.empty()) {queue.pop();}  // Empty the queue
+        while (!queue.empty()) {queue.pop();}  // Empty the queue
         // Count and enqueue the covering sensors
         active_covering_sensors = 0;
         for (const int a_sensor : this->poi_sensor[a_poi]) {
@@ -301,6 +302,8 @@ int KCMC_Instance::reuse(int k, int m, int flood_level,
     // Return the number of otherwise inactive sensors that were added only to guarantee k-coverage
     return ((int)(visited_sensors->size()))-pre_k_cov_sensors;
 }
+
+
 int KCMC_Instance::reuse(int k, int m,
                          std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors) {
     int added_min_r, min_r,  // Buffer for the number of nodes added for K-coverage and the resulting number of nodes

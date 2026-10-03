@@ -7,11 +7,15 @@
 // Dependencies from this package
 #include "kcmc_instance.h"  // KCMC Instance class headers
 
+// Constants to improve readability
+constexpr int UNVISITED_SENSOR = -2;
+constexpr int INVALID_PREVIOUS_POI = -1;
+
 
 /** LEVEL-GRAPH ALGORITM
  * Sets in each active sensor its level, that is the lowest distance to a sink using only active sensors
  */
-int KCMC_Instance::level_graph(int level_graph[], std::unordered_set<int> &inactive_sensors) {
+int KCMC_Instance::level_graph(std::vector<int> &level_graph, std::unordered_set<int> &inactive_sensors) {
     /* Sets the lowest distance in hops from each active sensor to the nearest sink using only active sensors
      */
 
@@ -22,7 +26,7 @@ int KCMC_Instance::level_graph(int level_graph[], std::unordered_set<int> &inact
     // Get the set of active neighbors of sinks. Set each neighbor's level to 0
     for (const auto &a_sink : this->sink_sensor) {
        for (const int &neighbor : a_sink.second) {
-           if (not isin(inactive_sensors, neighbor)) {
+           if (!isin(inactive_sensors, neighbor)) {
                level_graph[neighbor] = 0;
                work_set.insert(neighbor);
            }
@@ -41,7 +45,7 @@ int KCMC_Instance::level_graph(int level_graph[], std::unordered_set<int> &inact
         next_set.clear();
         for (const int &source : work_set) {
             for (const int &neighbor : this->sensor_sensor[source]) {
-                if (not isin(visited, neighbor)) {
+                if (!isin(visited, neighbor)) {
                     next_set.insert(neighbor);
                     level_graph[neighbor] = level;
                 }
@@ -61,23 +65,23 @@ int KCMC_Instance::level_graph(int level_graph[], std::unordered_set<int> &inact
 /** A* (A-STAR) PATHFINDING ALGORITHM
  */
 int KCMC_Instance::find_path(const int poi_number, std::unordered_set<int> &used_sensors,
-                             int level_graph[], int predecessors[]) {
+                             std::vector<int> &level_graph, std::vector<int> &predecessors) {
 
     // Local buffers
     int i_sensor;
     std::priority_queue<LevelNode, std::vector<LevelNode>, CompareLevelNode> queue;
 
     // Prepare a queue with each active unused sensor that covers the POI
-    // Add each of those sensors to the predecessors map having "-1" as the predecessor, meaning "the POI is the predecessor"
+    // Add each of those sensors to the predecessors map having "INVALID_PREVIOUS_POI" as the predecessor, meaning "the POI is the predecessor"
     for (const int &a_sensor : this->poi_sensor[poi_number]) {
-        if (not isin(used_sensors, a_sensor)) {
+        if (!isin(used_sensors, a_sensor)) {
             queue.push({a_sensor, level_graph[a_sensor]});
-            predecessors[a_sensor] = -1;
+            predecessors[a_sensor] = INVALID_PREVIOUS_POI;
         }
     }
 
     // Iterate until the queue is empty
-    while (not queue.empty()) {
+    while (!queue.empty()) {
         // Get the top sensor in the queue (lowest level) and visit it
         i_sensor = queue.top().index;
         queue.pop();
@@ -88,7 +92,7 @@ int KCMC_Instance::find_path(const int poi_number, std::unordered_set<int> &used
         // For each neighbor of the top sensor, if the neighbor has not been used or visited yet,
         // Add the unvisited active neighbor to the queue and the top sensor as its predecessor
         for (const int &neighbor : this->sensor_sensor[i_sensor]) {
-            if ((not isin(used_sensors, neighbor)) and (predecessors[neighbor] == -2)){
+            if ((!isin(used_sensors, neighbor)) && (predecessors[neighbor] == UNVISITED_SENSOR)){
                 queue.push({neighbor, level_graph[neighbor]});
                 predecessors[neighbor] = i_sensor;
                 // If the neighbor is sink-adjacent, we can return it directly
@@ -98,7 +102,7 @@ int KCMC_Instance::find_path(const int poi_number, std::unordered_set<int> &used
     }
 
     // If we got here, there is no possible path :(
-    return -1;
+    return INVALID_PREVIOUS_POI;
 }
 
 
@@ -118,17 +122,18 @@ int KCMC_Instance::fast_m_connectivity(const int m, std::unordered_set<int> &ina
     all_used_sensors->clear();
 
     // Base case
-    if (m < 1){return -1;}
+    if (m < 1){return INVALID_PREVIOUS_POI;}
 
     // Create the level graph
-    int level_graph[this->num_sensors];
+    std::vector<int> level_graph(this->num_sensors, INVALID_PREVIOUS_POI);
     this->level_graph(level_graph, inactive_sensors);
 
     // Prepare the set of "used" sensors
     std::unordered_set<int> used_sensors;
 
     // Create a loop control flag and pointer buffers
-    int paths_found, path_end, a_poi, predecessors[this->num_sensors];
+    int paths_found, path_end, a_poi;
+    std::vector<int> predecessors(this->num_sensors, UNVISITED_SENSOR);
 
     // Run for each POI, returning at the first failure
     for (a_poi=0; a_poi < this->num_pois; a_poi++) {
@@ -137,13 +142,13 @@ int KCMC_Instance::fast_m_connectivity(const int m, std::unordered_set<int> &ina
 
         // While there are still paths to be found
         while (paths_found < m) {
-            std::fill(predecessors, predecessors+this->num_sensors, -2);  // Reset the predecessors buffer
+            std::fill(predecessors.begin(), predecessors.end(), UNVISITED_SENSOR);  // Reset the predecessors buffer
 
             // Find a path
             path_end = this->find_path(a_poi, used_sensors, level_graph, predecessors);
 
             // If the path ends in an invalid sensor, return the failure.
-            if (path_end == -1) {
+            if (path_end == INVALID_PREVIOUS_POI) {
                 return ((1+a_poi)*1000000)+paths_found;  // Encoded the two ints. We must not have more than a Million POIs!
 
             // If success, count the path and mark all the sensors with predecessors as "used"
@@ -151,11 +156,11 @@ int KCMC_Instance::fast_m_connectivity(const int m, std::unordered_set<int> &ina
                 paths_found += 1;  // Count the newfound path
                 total_paths_found += 1;
                 // Unravel the path, marking each sensor in it as used
-                while (path_end != -1) {
+                while (path_end != INVALID_PREVIOUS_POI) {
                     used_sensors.insert(path_end);
                     vote(*all_used_sensors, path_end);  // Get the complete list of all used sensors
                     path_end = predecessors[path_end];
-                    if (path_end == -2) {throw std::runtime_error("FORBIDDEN ADDRESS!");}
+                    if (path_end == UNVISITED_SENSOR) {throw std::runtime_error("FORBIDDEN ADDRESS!");}
                 }
             }
         }
@@ -170,7 +175,7 @@ int KCMC_Instance::fast_m_connectivity(const int m, std::unordered_set<int> &ina
     std::unordered_map<int, int> buffer;
     int result = this->fast_m_connectivity(m, inactive_sensors, &buffer);
     // adjust the result
-    if (result < 1000000) {result = -1;}  // WE MUST HAVE FEWER THAN A MILLION PATHS!
+    if (result < 1000000) {result = INVALID_PREVIOUS_POI;}  // WE MUST HAVE FEWER THAN A MILLION PATHS!
     // Revert back to set
     all_used_sensors->clear();
     for (const auto i : buffer) {all_used_sensors->insert(i.first);}
@@ -184,7 +189,7 @@ int KCMC_Instance::fast_m_connectivity(const int m, std::unordered_set<int> &ina
 std::string KCMC_Instance::m_connectivity(const int m, std::unordered_set<int> &inactive_sensors) {
     std::unordered_set<int> used_sensors;
     int failure_at = this->fast_m_connectivity(m, inactive_sensors, &used_sensors);
-    if (failure_at == -1) {return "SUCCESS";}
+    if (failure_at == INVALID_PREVIOUS_POI) {return "SUCCESS";}
     else {
         std::ostringstream out;
         int a_poi = (failure_at / 1000000)-1, paths_found = failure_at % 1000000;  // Decode the result
@@ -202,14 +207,15 @@ int KCMC_Instance::get_connectivity(int buffer[], std::unordered_set<int> &inact
     // This method is a targeted variance to allow for a LARGE speedup in finding a smaller target
 
     // Create the level graph
-    int level_graph[this->num_sensors];
+    std::vector<int> level_graph(this->num_sensors, INVALID_PREVIOUS_POI);
     this->level_graph(level_graph, inactive_sensors);
 
     // Prepare the buffer set of "used" sensors
     std::unordered_set<int> used_sensors;
 
     // Create a loop control flag and pointer buffers, and a counter for the number of connected POIs
-    int paths_found, path_end, a_poi, predecessors[this->num_sensors], has_connection = 0;
+    int paths_found, path_end, a_poi, has_connection = 0;
+    std::vector<int> predecessors(this->num_sensors, UNVISITED_SENSOR);
 
     // Run for each POI, returning at the first failure
     for (a_poi=0; a_poi < this->num_pois; a_poi++) {
@@ -218,13 +224,13 @@ int KCMC_Instance::get_connectivity(int buffer[], std::unordered_set<int> &inact
 
         // While there are still paths to be found
         while (paths_found < target) {
-            std::fill(predecessors, predecessors+this->num_sensors, -2);  // Reset the predecessors buffer
+            std::fill(predecessors.begin(), predecessors.end(), UNVISITED_SENSOR);  // Reset the predecessors buffer
 
             // Find a path
             path_end = this->find_path(a_poi, used_sensors, level_graph, predecessors);
 
             // If the path ends in an invalid sensor, stop the WHILE loop
-            if (path_end == -1) {
+            if (path_end == INVALID_PREVIOUS_POI) {
                 buffer[a_poi] = paths_found;
                 has_connection += 1;
                 paths_found = target;
@@ -233,10 +239,10 @@ int KCMC_Instance::get_connectivity(int buffer[], std::unordered_set<int> &inact
             } else {
                 paths_found += 1;  // Count the newfound path
                 // Unravel the path, marking each sensor in it as used
-                while (path_end != -1) {
+                while (path_end != INVALID_PREVIOUS_POI) {
                     used_sensors.insert(path_end);
                     path_end = predecessors[path_end];
-                    if (path_end == -2) {throw std::runtime_error("FORBIDDEN ADDRESS!");}
+                    if (path_end == UNVISITED_SENSOR) {throw std::runtime_error("FORBIDDEN ADDRESS!");}
                 }
                 // Store if we've reached the target
                 if (paths_found >= target) {

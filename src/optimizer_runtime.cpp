@@ -1,16 +1,18 @@
 
 
 // STDLib dependencies
+#include <vector>     // vector
 #include <csignal>    // SIGINT and other signals
 #include <queue>      // queue
 #include <iostream>   // cin, cout, endl
+#include <sstream>    // ostringstream
 #include <chrono>     // time functions
 #include <iomanip>    // setfill, setw
 #include <cstring>    // strcpy
+#include <algorithm>  // copy, fill, transform
 
 // Dependencies from this package
-#include "kcmc_instance.h"  // KCMC Instance class headers
-#include "genetic_algorithm_operators.h"  // exit_signal_handler
+#include "kcmc_instance.h"  // KCMC Instance class headers, exit_signal_handler
 
 
 /* #####################################################################################################################
@@ -28,8 +30,7 @@ void printout_short(KCMC_Instance *instance, int k, int m,
     bool valid = instance->validate(false, k, m, inactive_sensors);
 
     // Reformat the used installation spots as an array of 0/1
-    int individual[num_sensors];
-    std::fill(individual, individual+num_sensors, 0);
+    std::vector<int> individual(num_sensors, 0);
     for (const int &used_spot : used_installation_spots) { individual[used_spot] = 1; }
 
     // Prepare the output buffer
@@ -71,11 +72,15 @@ int main(int argc, char* const argv[]) {
 
     // Registers the signal handlers
     signal(SIGINT, exit_signal_handler);
-    signal(SIGALRM, exit_signal_handler);
     signal(SIGABRT, exit_signal_handler);
-    signal(SIGSTOP, exit_signal_handler);
     signal(SIGTERM, exit_signal_handler);
+
+    // The signals below are undefined in windows, exist only in linux
+#ifndef _WIN32
+    signal(SIGALRM, exit_signal_handler);
+    signal(SIGSTOP, exit_signal_handler);
     signal(SIGKILL, exit_signal_handler);
+#endif
 
     // Buffers
     int k, m, num_paths;
@@ -89,13 +94,15 @@ int main(int argc, char* const argv[]) {
      * */
     auto *instance = new KCMC_Instance(argv[1]);
     alt_k = argv[2];
-    std::transform(alt_k.begin(), alt_k.end(),alt_k.begin(), ::toupper);
-    char p[alt_k.size()];
-    strcpy(p, alt_k.c_str());
+    std::transform(
+        alt_k.begin(), alt_k.end(), alt_k.begin(),
+        [](unsigned char c) { return static_cast<char>(std::toupper(c)); }
+   );
     if (alt_k.find('K') != std::string::npos) {
-        k = ((int)p[2]) - ((int)'0');  // ONLY FOR K,M < 10!!!
-        m = ((int)p[4]) - ((int)'0');  // ONLY FOR K,M < 10!!!
+        k = alt_k.at(1) - '0';  // ONLY FOR K,M < 10!!!
+        m = alt_k.at(3) - '0';  // ONLY FOR K,M < 10!!!
     } else {
+        if (argc < 4) { help(); } // argv[3] is required here
         k = std::stoi(argv[2]);
         m = std::stoi(argv[3]);
     }

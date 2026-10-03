@@ -5,8 +5,16 @@
 
 
 // STDLib Dependencies
-#include <unistd.h>  // getpid
+#if defined(_WIN32)
+#include <process.h>
+#define getpid _getpid  //getpid on Windows
+#else
+#include <unistd.h>  //getpid on Linux
+#endif
 #include <iostream>  // cin, cout, endl, printf, fprintf
+#include <cstdlib>   // atoi, atoll, srand, rand
+#include <ctime>     // time
+#include <unordered_set>  // unordered_set
 
 // Dependencies from this package
 #include "kcmc_instance.h"

@@ -18,7 +18,7 @@ services:
   instance_generator:
     # Instances generator
     profiles:
-      - generator
+      - instance_generator
     command: '/src/run_instance_generator.sh'
     build:
       dockerfile: instance_generator.dockerfile
@@ -34,7 +34,7 @@ services:
     build:
       dockerfile: gurobi.dockerfile
       context: .
-    command: "python -u /home/gurobi/src/gurobi_optimizer.py --instances_file /data/instances.csv --limit 3600 --results s3://kcmc-heuristic/2022-06 --lock KCMC"
+    command: "python -u /home/gurobi/src/gurobi_optimizer.py --instances_file /data/instances.csv --limit 3600 --results s3://kcmc-heuristic/2026-10 --lock KCMC"
     environment:
       GRB_CLIENT_LOG: 3
       PYTHONPATH: "/home/gurobi/src"

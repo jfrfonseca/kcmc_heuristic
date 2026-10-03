@@ -2,7 +2,7 @@
  * Uses the same method to generate random placements from a seed, and print it to STDOUT
  */
 
-#include <random>     // mt19937, uniform_real_distribution
+#include <random>    // mt19937, uniform_real_distribution
 #include <iostream>  // cin, cout, endl
 
 

@@ -5,6 +5,7 @@
 
 
 // STDLib dependencies
+#include <vector>     // vector
 #include <sstream>    // ostringstream
 #include <random>     // mt19937, uniform_real_distribution
 #include <algorithm>  // std::find
@@ -74,10 +75,10 @@ void KCMC_Instance::regenerate() {
     int i, j;
 
     // Prepare the placement buffers. The scope of these buffers is only the constructor itself
-    Placement pl_pois[this->num_pois], pl_sensors[this->num_sensors], pl_sinks[this->num_sinks];
+    std::vector<Placement> pl_pois(this->num_pois), pl_sensors(this->num_sensors), pl_sinks(this->num_sinks);
 
     // Get the placemens of the instance objects
-    this->get_placements(pl_pois, pl_sensors, pl_sinks, true);  // Use the private version, that pushes components
+    this->get_placements(pl_pois.data(), pl_sensors.data(), pl_sinks.data(), true);  // Use the private version, that pushes components
 
     // Iterate each sensor and find its connections
     for (i=0; i<this->num_sensors; i++) {
@@ -343,8 +344,8 @@ std::string KCMC_Instance::serialize() {
 
 int KCMC_Instance::invert_set(std::unordered_set<int> &source_set, std::unordered_set<int> *target_set) {
     target_set->clear();
-    for (int i=0; i<num_sensors; i++) {
-        if (not isin(source_set, i)) {
+    for (int i=0; i<this->num_sensors; i++) {
+        if (!isin(source_set, i)) {
             target_set->insert(i);
         }
     }

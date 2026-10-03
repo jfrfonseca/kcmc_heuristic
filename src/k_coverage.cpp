@@ -5,6 +5,7 @@
 
 
 // STDLib dependencies
+#include <iostream>   // cout, endl, cerr
 #include <sstream>    // ostringstream
 #include <random>     // mt19937, uniform_real_distribution
 #include <algorithm>  // std::find
@@ -16,6 +17,12 @@
 /* #####################################################################################################################
  * UTILITY FUNCTIONS
  */
+
+
+void exit_signal_handler(int signal) {
+   std::cerr << "Interrupt signal (" << signal << ") received. Exiting gracefully..." << std::endl;
+   exit(0);
+}
 
 
 /* ISIN (IS IN)
