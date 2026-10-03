@@ -14,8 +14,6 @@
 #ifndef GENETIC_ALGORITHM_OPERATORS_H
 #define GENETIC_ALGORITHM_OPERATORS_H
 
-void exit_signal_handler(int signal);
-
 void printout(int num_generation, double pop_entropy, int chromo_size, int *individual, double fitness);
 
 int individual_creation(float one_bias, int size, int chromo[]);

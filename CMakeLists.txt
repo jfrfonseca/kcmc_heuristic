@@ -10,8 +10,8 @@ ADD_LIBRARY(KCMC_Module
             src/m_connectivity.cpp
             src/optimizer.cpp
             src/kcmc_instance.h
-            src/genetic_algorithm_operators.cpp
-            src/genetic_algorithm_operators.h
+            #src/genetic_algorithm_operators.cpp
+            #src/genetic_algorithm_operators.h
 )
 target_link_libraries(KCMC_Module)
 
@@ -39,9 +39,10 @@ ADD_EXECUTABLE(placements_visualizer src/placements_visualizer.cpp)
 # ADD_EXECUTABLE(optimizer_gupta_adapted deprecated/optimizer_gupta_adapted.cpp)
 # target_link_libraries(optimizer_gupta_adapted KCMC_Module)
 
-ADD_EXECUTABLE(optimizer_genalg_binary src/optimizer_binary_genalg.cpp)
-target_link_libraries(optimizer_genalg_binary KCMC_Module)
+#ADD_EXECUTABLE(optimizer_genalg_binary src/optimizer_binary_genalg.cpp)
+#target_link_libraries(optimizer_genalg_binary KCMC_Module)
 
+## Optimizers (DINITZ) --------------------------------------------------------
 
 ADD_EXECUTABLE(optimizer src/optimizer_runtime.cpp)
 target_link_libraries(optimizer KCMC_Module)

@@ -19,12 +19,6 @@
 #include "genetic_algorithm_operators.h"
 
 
-void exit_signal_handler(int signal) {
-   std::cerr << "Interrupt signal (" << signal << ") received. Exiting gracefully..." << std::endl;
-   exit(0);
-}
-
-
 void printout(int num_generation, double pop_entropy, int chromo_size, int *individual, double fitness) {
 
     // Get the number of USED sensors in the individual
