@@ -2,6 +2,16 @@
 # KCMC Heuristic
 
 
+## Rebuilding the containers
+
+It might be necessary to rebuild the containers if there are changes in the Dockerfiles, but usually not in the source code because most of the source code is dynamically mounted into the containers as volumes.
+Normally, rebuilding the containers is only necessary when there are changes in dependencies.
+
+To rebuild the Docker containers, use the following command:
+```bash
+docker compose build compiler instance_generator
+```
+
 
 ## Compiler
 
