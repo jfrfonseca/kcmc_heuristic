@@ -11,6 +11,7 @@
 #else
 #include <unistd.h>  //getpid on Linux
 #endif
+#include <string>    // to_string
 #include <iostream>  // cin, cout, endl, printf, fprintf
 #include <cstdlib>   // atoi, atoll, srand, rand
 #include <ctime>     // time
@@ -52,12 +53,9 @@ void help(int argc, char* const argv[]) {
 int main(int argc, char* const argv[]) {
     if (argc < 7) {help(argc, argv);}
 
-    /* ======================== *
-     * PARSE THE INPUT SETTINGS *
-     * ======================== */
-
     /* Prepare Buffers */
-    int i, num_pois, num_sensors, num_sinks, area_side, coverage_radius, communication_radius, success, kcmc_k, kcmc_m;
+    bool success;
+    int i, num_pois, num_sensors, num_sinks, area_side, coverage_radius, communication_radius, kcmc_k, kcmc_m;
     long long random_seed, previous_seed;
     std::unordered_set<int> emptyset, ignoredset;
 
@@ -73,14 +71,10 @@ int main(int argc, char* const argv[]) {
     srand(time(NULL) + getpid());  // Diferent seed in each run for each process
     previous_seed = 100000000 + std::abs((rand() % 100000000)) + std::abs((rand() % 100000000));  // LARGE but random-er number
 
-    /* ================== *
-     * GENERATE INSTANCES *
-     * ================== */
-
     for (i=7; i<argc; i++) {
         random_seed = atoll(argv[i]);
 
-        // FAIL-SAFE mode
+        // MODE WHERE WE HAVE TO FIND A VALID INSTANCE (no seed given)
         if (random_seed == 0) {
 
             // Read K and M
@@ -88,31 +82,45 @@ int main(int argc, char* const argv[]) {
             kcmc_m = atoi(argv[i+2]);
             i += 2;
 
-            // Start from the last random seed
-            random_seed = previous_seed + 1;
-
             // Try many times until get a valid instance
-            while (random_seed < (previous_seed + 10000)) {  // MANY ATTEMPTS!
-                success = 0;
+            for (int attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt++) {  // MANY ATTEMPTS!
+
+                // Update the random seed
+                random_seed = previous_seed + std::abs((rand() % 100000)) + 7;
+
+                // Try with the current random seed
+                success = false;
                 auto *instance = new KCMC_Instance(num_pois, num_sensors, num_sinks,
                                                    area_side, coverage_radius, communication_radius,
                                                    random_seed);
-                success = instance->fast_k_coverage(kcmc_k, emptyset);
-                if (success == -1) {
-                    success = instance->fast_m_connectivity(kcmc_m, emptyset, &ignoredset);
-                    if (success == -1) {
-                        //printf("%s | (K%dM%d)\n", instance->serialize().c_str(), kcmc_k, kcmc_m);
-                        printf("KCMC;%s;END | (K%dM%d)\n", instance->key().c_str(), kcmc_k, kcmc_m);
-                        previous_seed = random_seed + std::abs((rand() % 100000)) + 7;
-                        break;
-                    }
+
+                // If the instance is valid, stop trying and print it
+                if (instance->validate(false, kcmc_k, kcmc_m, USE_GREEDY)) {
+                    success = true;
+                    printf("KCMC;%s;END | (K%dM%d)\n", instance->key().c_str(), kcmc_k, kcmc_m);
+                    attempt = 2*MAX_GENERATION_ATTEMPTS;
+                    break;
                 }
-                random_seed++;
             }
-            if (success != -1) {printf("UNABLE TO GENERATE VALID INSTANCE WITH PARAMETERS %d %d %d %d %d %d 0 %d %d\n",
-                                       num_pois, num_sensors, num_sinks, area_side, coverage_radius, communication_radius, kcmc_k, kcmc_m);}
-        } else {
-            // FAIL-PRONE MODE
+
+            // Raise an error if we were unable to generate a valid instance
+            if (!success) {
+                throw std::runtime_error(
+                    "UNABLE TO GENERATE VALID INSTANCE WITH PARAMETERS " +
+                    std::to_string(num_pois) + " " +
+                    std::to_string(num_sensors) + " " +
+                    std::to_string(num_sinks) + " " +
+                    std::to_string(area_side) + " " +
+                    std::to_string(coverage_radius) + " " +
+                    std::to_string(communication_radius) + " 0 " +
+                    std::to_string(kcmc_k) + " " +
+                    std::to_string(kcmc_m));
+                }
+
+        }
+
+        // MODE WHERE A SEED IS PROVIDED AND WE MUST COMPUTE THE INSTANCE FROM IT AND TEST IT
+        else {
             try {
                 auto *instance = new KCMC_Instance(num_pois, num_sensors, num_sinks,
                                                    area_side, coverage_radius, communication_radius,

@@ -204,7 +204,7 @@ KCMC_Instance::KCMC_Instance(const std::string& serialized_kcmc_instance) {
     if (this->num_sensors == 0) {throw std::runtime_error("INSTANCE HAS NO SENSORS!");}
     if (this->num_sinks == 0) {throw std::runtime_error("INSTANCE HAS NO SINKS!");}
 
-    // If we got here and have no edges, we must re-generate this instance
+    // If we got here and have no edges, we must re-generate this instance.
     if (has_edges == 0) { this->regenerate(); }
 }
 
@@ -356,12 +356,13 @@ int KCMC_Instance::invert_set(std::unordered_set<int> &source_set, std::unordere
 bool KCMC_Instance::validate(const bool raise, const int k, const int m,
                              std::unordered_set<int> &inactive_sensors,
                              std::unordered_set<int> *k_used_sensors,
-                             std::unordered_set<int> *m_used_sensors) {
+                             std::unordered_set<int> *m_used_sensors,
+                             bool use_greedy) {
     int valid;
 
     // Check validity, recovering the used sensors for K coverage and M connectivity
     try {
-        valid = this->fast_k_coverage(k, inactive_sensors, k_used_sensors);
+        valid = this->k_coverage(k, inactive_sensors, k_used_sensors);
         if (valid != -1) { throw std::runtime_error("INVALID INSTANCE! (INSUFFICIENT COVERAGE)"); }
     }
     catch (const std::exception &exc) {
@@ -370,7 +371,11 @@ bool KCMC_Instance::validate(const bool raise, const int k, const int m,
     }
 
     try {
-        valid = this->fast_m_connectivity(m, inactive_sensors, m_used_sensors);
+        if (use_greedy) {
+            valid = this->m_connectivity_greedy(m, inactive_sensors, m_used_sensors);
+        } else {
+            valid = this->m_connectivity(m, inactive_sensors, m_used_sensors);
+        }
         if (valid != -1) { throw std::runtime_error("INVALID INSTANCE! (INSUFFICIENT CONNECTIVITY)"); }
     }
     catch (const std::exception &exc) {
@@ -379,17 +384,28 @@ bool KCMC_Instance::validate(const bool raise, const int k, const int m,
     }
     return true;
 }
-
 bool KCMC_Instance::validate(const bool raise, const int k, const int m,
-                             std::unordered_set<int> &inactive_sensors) {
-    // Prepare the ignored results buffer and the empty set of inactive sensors
-    std::unordered_set<int> ignored;
-    return this->validate(raise, k, m, inactive_sensors, &ignored, &ignored);
+                             std::unordered_set<int> &inactive_sensors,
+                             std::unordered_set<int> *k_used_sensors,
+                             std::unordered_set<int> *m_used_sensors) {
+    return this->validate(raise, k, m, inactive_sensors, k_used_sensors, m_used_sensors, false);
 }
 
 
+bool KCMC_Instance::validate(const bool raise, const int k, const int m,
+                             std::unordered_set<int> &inactive_sensors,
+                             bool use_greedy) {
+    // Prepare the ignored results buffer and the empty set of inactive sensors
+    std::unordered_set<int> ignored;
+    return this->validate(raise, k, m, inactive_sensors, &ignored, &ignored, use_greedy);
+}
+bool KCMC_Instance::validate(const bool raise, const int k, const int m, bool use_greedy) {
+    // Prepare the ignored results buffer and the empty set of inactive sensors
+    std::unordered_set<int> emptyset;
+    return this->validate(raise, k, m, emptyset, use_greedy);
+}
 bool KCMC_Instance::validate(const bool raise, const int k, const int m) {
     // Prepare the ignored results buffer and the empty set of inactive sensors
     std::unordered_set<int> emptyset;
-    return this->validate(raise, k, m, emptyset);
+    return this->validate(raise, k, m, emptyset, false);
 }

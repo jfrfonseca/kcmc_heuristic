@@ -15,7 +15,7 @@ constexpr int INVALID_PREVIOUS_POI = -1;
 /** LEVEL-GRAPH ALGORITM
  * Sets in each active sensor its level, that is the lowest distance to a sink using only active sensors
  */
-int KCMC_Instance::level_graph(std::vector<int> &level_graph, std::unordered_set<int> &inactive_sensors) {
+int KCMC_Instance::greedy_level_graph(std::vector<int> &greedy_level_graph, std::unordered_set<int> &inactive_sensors) {
     /* Sets the lowest distance in hops from each active sensor to the nearest sink using only active sensors
      */
 
@@ -27,7 +27,7 @@ int KCMC_Instance::level_graph(std::vector<int> &level_graph, std::unordered_set
     for (const auto &a_sink : this->sink_sensor) {
        for (const int &neighbor : a_sink.second) {
            if (!isin(inactive_sensors, neighbor)) {
-               level_graph[neighbor] = 0;
+               greedy_level_graph[neighbor] = 0;
                work_set.insert(neighbor);
            }
        }
@@ -47,7 +47,7 @@ int KCMC_Instance::level_graph(std::vector<int> &level_graph, std::unordered_set
             for (const int &neighbor : this->sensor_sensor[source]) {
                 if (!isin(visited, neighbor)) {
                     next_set.insert(neighbor);
-                    level_graph[neighbor] = level;
+                    greedy_level_graph[neighbor] = level;
                 }
             }
         }
@@ -64,8 +64,7 @@ int KCMC_Instance::level_graph(std::vector<int> &level_graph, std::unordered_set
 
 /** A* (A-STAR) PATHFINDING ALGORITHM
  */
-int KCMC_Instance::find_path(const int poi_number, std::unordered_set<int> &used_sensors,
-                             std::vector<int> &level_graph, std::vector<int> &predecessors) {
+int KCMC_Instance::greedy_find_path(const int poi_number, std::unordered_set<int> &used_sensors, std::vector<int> &level_graph, std::vector<int> &predecessors) {
 
     // Local buffers
     int i_sensor;
@@ -106,18 +105,11 @@ int KCMC_Instance::find_path(const int poi_number, std::unordered_set<int> &used
 }
 
 
-/** FAST M-CONNECTIVITY VALIDATOR USING DINIC'S ALGORITHM
- * Fastest validator.
- * It could also validate if every POI has at least M connections to sensors,
- *     but it would be unnecessary if K-coverage has already been validated
- *     and K >= M. Thus we do not try.
- * We do, however, note every single sensor used anywhere in the resulting WSN
+/** M-Connectivity by the Greedy Heuristic
+ * Gets the list of used sensors needed to get m-connectivity by the GREEDY heuristic.
  */
-int KCMC_Instance::fast_m_connectivity(const int m, std::unordered_set<int> &inactive_sensors,
-                                       std::unordered_map<int, int> *all_used_sensors) {
-    /** Verify if every POI has at least M different disjoint paths to all SINKs
-     */
-     int total_paths_found = 0;
+int KCMC_Instance::m_connectivity_greedy(const int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *all_used_sensors, const int path_increase_tolerance) {
+
     // Clear the set of active sensors
     all_used_sensors->clear();
 
@@ -125,57 +117,92 @@ int KCMC_Instance::fast_m_connectivity(const int m, std::unordered_set<int> &ina
     if (m < 1){return INVALID_PREVIOUS_POI;}
 
     // Create the level graph
-    std::vector<int> level_graph(this->num_sensors, INVALID_PREVIOUS_POI);
-    this->level_graph(level_graph, inactive_sensors);
+    std::vector<int> greedy_level_graph(this->num_sensors, INVALID_PREVIOUS_POI);
+    this->greedy_level_graph(greedy_level_graph, inactive_sensors);
 
     // Prepare the set of "used" sensors
-    std::unordered_set<int> used_sensors;
+    std::unordered_set<int> poi_used_sensors;
 
     // Create a loop control flag and pointer buffers
-    int paths_found, path_end, a_poi;
+    int paths_found, path_end, current_path_step, a_poi, total_paths_found=0, path_length=0, longest_path_length=0;  // the lengths must be initialized as 0
     std::vector<int> predecessors(this->num_sensors, UNVISITED_SENSOR);
 
     // Run for each POI, returning at the first failure
     for (a_poi=0; a_poi < this->num_pois; a_poi++) {
         paths_found = 0;  // Clear the number of paths found for the POI
-        used_sensors = inactive_sensors;  // Reset the set of used sensors for each POI
+        poi_used_sensors = std::unordered_set<int>(inactive_sensors.begin(), inactive_sensors.end());  // Reset the set of used sensors for each POI
 
         // While there are still paths to be found
-        while (paths_found < m) {
+        while ((paths_found < m) || (path_increase_tolerance >= 0)) {
             std::fill(predecessors.begin(), predecessors.end(), UNVISITED_SENSOR);  // Reset the predecessors buffer
 
             // Find a path
-            path_end = this->find_path(a_poi, used_sensors, level_graph, predecessors);
+            path_end = this->greedy_find_path(a_poi, poi_used_sensors, greedy_level_graph, predecessors);
 
             // If the path ends in an invalid sensor, return the failure.
             if (path_end == INVALID_PREVIOUS_POI) {
-                return ((1+a_poi)*1000000)+paths_found;  // Encoded the two ints. We must not have more than a Million POIs!
+                return ((1+a_poi)*LARGE_NUMBER) + paths_found;  // Encoded the two ints. We must not have more than a LARGE_NUMBER of POIs!
 
             // If success, count the path and mark all the sensors with predecessors as "used"
             } else {
+
+                // If we already found the required number of paths for this POI, we are in a BREADTH iteration
+                if ((paths_found >= m) && (path_increase_tolerance >= 0)) {
+
+                    // Unravel the path to get its size
+                    path_length = 0;  // Initialize the path length counter
+                    current_path_step = path_end;  // Initialize the current path step to the end of the path
+                    while (current_path_step != INVALID_PREVIOUS_POI) {
+                        path_length += 1;  // Count the current step in the path
+                        current_path_step = predecessors[current_path_step];
+                    }
+
+                    // If the size is larger than the longest path length + path_increase_tolerance,
+                    // break here and now
+                    if (path_length > (longest_path_length + path_increase_tolerance)) {
+                        break;
+                    }
+                }
+
+                // If we got here, we must include the path in our solution
                 paths_found += 1;  // Count the newfound path
-                total_paths_found += 1;
-                // Unravel the path, marking each sensor in it as used
-                while (path_end != INVALID_PREVIOUS_POI) {
-                    used_sensors.insert(path_end);
-                    vote(*all_used_sensors, path_end);  // Get the complete list of all used sensors
-                    path_end = predecessors[path_end];
-                    if (path_end == UNVISITED_SENSOR) {throw std::runtime_error("FORBIDDEN ADDRESS!");}
+                total_paths_found += 1;  // Count in the absolute total
+                path_length = 0;  // Initialize the path length counter
+                current_path_step = path_end;  // Initialize the current path step to the end of the path
+                while (current_path_step != INVALID_PREVIOUS_POI) {
+                    if (current_path_step == UNVISITED_SENSOR) {throw std::runtime_error("FORBIDDEN ADDRESS!");}
+
+                    poi_used_sensors.insert(current_path_step);
+                    vote(*all_used_sensors, current_path_step);  // Add a vote to the current sensor
+
+                    // update the path length
+                    path_length += 1;
+                    current_path_step = predecessors[current_path_step];
+                }
+
+                // Update the longest path length if the current path is longer, but onlyu if we are in the first m paths
+                if (paths_found <= m) {
+                    longest_path_length = std::max(longest_path_length, path_length);
                 }
             }
         }
+
+        // ERROR CASE - return the POI that has insuficient paths, encoded with the number of paths
+        if (paths_found < m) {return ((1+a_poi)*LARGE_NUMBER) + paths_found;}
     }
 
     // Success in each and every POI!
     return total_paths_found;
 }
-int KCMC_Instance::fast_m_connectivity(const int m, std::unordered_set<int> &inactive_sensors,
-                                       std::unordered_set<int> *all_used_sensors) {
+int KCMC_Instance::m_connectivity_greedy(const int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *all_used_sensors) {
+    return this->m_connectivity_greedy(m, inactive_sensors, all_used_sensors, -1);  // No tolerance for path increases
+}
+int KCMC_Instance::m_connectivity_greedy(const int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> *all_used_sensors) {
     // Run with a map
     std::unordered_map<int, int> buffer;
-    int result = this->fast_m_connectivity(m, inactive_sensors, &buffer);
+    int result = this->m_connectivity_greedy(m, inactive_sensors, &buffer);
     // adjust the result
-    if (result < 1000000) {result = INVALID_PREVIOUS_POI;}  // WE MUST HAVE FEWER THAN A MILLION PATHS!
+    if (result < LARGE_NUMBER) {result = INVALID_PREVIOUS_POI;}  // WE MUST HAVE FEWER THAN A LARGE_NUMBER OF PATHS!
     // Revert back to set
     all_used_sensors->clear();
     for (const auto i : buffer) {all_used_sensors->insert(i.first);}
@@ -183,32 +210,16 @@ int KCMC_Instance::fast_m_connectivity(const int m, std::unordered_set<int> &ina
 }
 
 
-/** M-CONNECTIVITY VALIDATOR USING DINIC'S ALGORITHM
- * Wrapper around the fastest validator, to allow for better process message passing.
- */
-std::string KCMC_Instance::m_connectivity(const int m, std::unordered_set<int> &inactive_sensors) {
-    std::unordered_set<int> used_sensors;
-    int failure_at = this->fast_m_connectivity(m, inactive_sensors, &used_sensors);
-    if (failure_at == INVALID_PREVIOUS_POI) {return "SUCCESS";}
-    else {
-        std::ostringstream out;
-        int a_poi = (failure_at / 1000000)-1, paths_found = failure_at % 1000000;  // Decode the result
-        out << "POI " << a_poi << " CONNECTIVITY " << paths_found;
-        return out.str();
-    }
-}
-
-
 /** Connectivity getter
  * Gets the connectivity at each POI, and the number of POIs with any connectivity at all
  * For faster results, limit the connectivity at "target".
  */
-int KCMC_Instance::get_connectivity(int buffer[], std::unordered_set<int> &inactive_sensors, int target) {
+int KCMC_Instance::get_connectivity_greedy(int buffer[], std::unordered_set<int> &inactive_sensors, int target) {
     // This method is a targeted variance to allow for a LARGE speedup in finding a smaller target
 
     // Create the level graph
-    std::vector<int> level_graph(this->num_sensors, INVALID_PREVIOUS_POI);
-    this->level_graph(level_graph, inactive_sensors);
+    std::vector<int> greedy_level_graph(this->num_sensors, INVALID_PREVIOUS_POI);
+    this->greedy_level_graph(greedy_level_graph, inactive_sensors);
 
     // Prepare the buffer set of "used" sensors
     std::unordered_set<int> used_sensors;
@@ -227,7 +238,7 @@ int KCMC_Instance::get_connectivity(int buffer[], std::unordered_set<int> &inact
             std::fill(predecessors.begin(), predecessors.end(), UNVISITED_SENSOR);  // Reset the predecessors buffer
 
             // Find a path
-            path_end = this->find_path(a_poi, used_sensors, level_graph, predecessors);
+            path_end = this->greedy_find_path(a_poi, used_sensors, greedy_level_graph, predecessors);
 
             // If the path ends in an invalid sensor, stop the WHILE loop
             if (path_end == INVALID_PREVIOUS_POI) {
@@ -255,6 +266,6 @@ int KCMC_Instance::get_connectivity(int buffer[], std::unordered_set<int> &inact
     // Return the number of connected POIs
     return has_connection;
 }
-int KCMC_Instance::get_connectivity(int buffer[], std::unordered_set<int> &inactive_sensors) {
-    return this->get_connectivity(buffer, inactive_sensors, 10);  // Default value for target
+int KCMC_Instance::get_connectivity_greedy(int buffer[], std::unordered_set<int> &inactive_sensors) {
+    return this->get_connectivity_greedy(buffer, inactive_sensors, 10);  // Default value for target
 }
