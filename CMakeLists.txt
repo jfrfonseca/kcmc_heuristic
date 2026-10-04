@@ -7,8 +7,10 @@ set(CMAKE_CXX_STANDARD 14)
 ADD_LIBRARY(KCMC_Module
             src/kcmc_instance.cpp
             src/k_coverage.cpp
-            src/m_connectivity.cpp
-            src/optimizer.cpp
+            src/m_connectivity_greedy.cpp
+            src/m_connectivity_dinitz.cpp
+            src/optimizer_greedy.cpp
+            src/m_connectivity_dinitz.cpp
             src/kcmc_instance.h
             #src/genetic_algorithm_operators.cpp
             #src/genetic_algorithm_operators.h
@@ -20,17 +22,19 @@ target_link_libraries(KCMC_Module)
 ADD_EXECUTABLE(instance_generator src/instance_generator.cpp)
 target_link_libraries(instance_generator KCMC_Module)
 
-ADD_EXECUTABLE(photogenic_instance_generator src/photogenic_instance_generator.cpp)
-target_link_libraries(photogenic_instance_generator KCMC_Module)
-
 
 # Instance evaluator ----------------------------------------------------------
 ADD_EXECUTABLE(instance_evaluator src/instance_evaluator.cpp)
 target_link_libraries(instance_evaluator KCMC_Module)
 
 
+#ADD_EXECUTABLE(photogenic_instance_generator src/photogenic_instance_generator.cpp)
+#target_link_libraries(photogenic_instance_generator KCMC_Module)
+
+
 # Random Placements Visualizer ------------------------------------------------
-ADD_EXECUTABLE(placements_visualizer src/placements_visualizer.cpp)
+#ADD_EXECUTABLE(placements_visualizer src/placements_visualizer.cpp)
+#target_link_libraries(placements_visualizer KCMC_Module)
 
 
 ## Optimizers (GEN ALG) -------------------------------------------------------
@@ -44,5 +48,5 @@ ADD_EXECUTABLE(placements_visualizer src/placements_visualizer.cpp)
 
 ## Optimizers (DINITZ) --------------------------------------------------------
 
-ADD_EXECUTABLE(optimizer src/optimizer_runtime.cpp)
-target_link_libraries(optimizer KCMC_Module)
+#ADD_EXECUTABLE(optimizer src/optimizer_runtime.cpp)
+#target_link_libraries(optimizer KCMC_Module)

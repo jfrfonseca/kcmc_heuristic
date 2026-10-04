@@ -27,6 +27,19 @@ services:
       - ./data:/data:rw
       - ./src:/src:ro
 
+  instance_evaluator:
+    # Instances evaluator
+    profiles:
+      - instance_evaluator
+    command: '/src/run_instance_evaluator.sh'
+    build:
+      dockerfile: instance_generator.dockerfile
+      context: .
+    volumes:
+      - ./data:/data:rw
+      - ./builds:/app:ro
+      - ./src:/src:ro
+
   optimizer:
     profiles:
       - gurobi
