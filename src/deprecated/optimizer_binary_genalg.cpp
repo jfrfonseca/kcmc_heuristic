@@ -13,6 +13,89 @@
 #include "genetic_algorithm_operators.h"
 
 
+
+
+/** Coverage getter
+ * Gets the coverage at each POI, and the number of POIs with any coverage at all
+ */
+int KCMC_Instance::get_coverage(int buffer[], std::unordered_set<int> &inactive_sensors) {
+
+    // For each POI, count its coverage and if it has coverage at all
+    int has_coverage = 0;
+    for (int n_poi=0; n_poi < this->num_pois; n_poi++) {
+        buffer[n_poi] = (int)(set_diff(poi_sensor[n_poi], inactive_sensors).size());
+        has_coverage += buffer[n_poi] > 0 ? 1 : 0;
+    }
+
+    // Return the number of POIs that have any coverage at all
+    return has_coverage;
+}
+
+
+
+
+/** Connectivity getter
+ * Gets the connectivity at each POI, and the number of POIs with any connectivity at all
+ * For faster results, limit the connectivity at "target".
+ */
+int KCMC_Instance::get_connectivity_greedy(int buffer[], std::unordered_set<int> &inactive_sensors, int target) {
+    // This method is a targeted variance to allow for a LARGE speedup in finding a smaller target
+
+    // Create the level graph
+    std::vector<int> level_graph(this->num_sensors, INVALID_PREVIOUS_POI);
+    this->compute_level_graph(level_graph, inactive_sensors);
+
+    // Prepare the buffer set of "used" sensors
+    std::unordered_set<int> used_sensors;
+
+    // Create a loop control flag and pointer buffers, and a counter for the number of connected POIs
+    int paths_found, path_end, a_poi, has_connection = 0;
+    std::vector<int> predecessors(this->num_sensors, UNVISITED_SENSOR);
+
+    // Run for each POI, returning at the first failure
+    for (a_poi=0; a_poi < this->num_pois; a_poi++) {
+        paths_found = 0;  // Clear the number of paths found for the POI
+        used_sensors = inactive_sensors;  // Reset the set of used sensors for each POI
+
+        // While there are still paths to be found
+        while (paths_found < target) {
+            std::fill(predecessors.begin(), predecessors.end(), UNVISITED_SENSOR);  // Reset the predecessors buffer
+
+            // Find a path
+            path_end = this->greedy_find_path(a_poi, used_sensors, level_graph, predecessors);
+
+            // If the path ends in an invalid sensor, stop the WHILE loop
+            if (path_end == INVALID_PREVIOUS_POI) {
+                buffer[a_poi] = paths_found;
+                has_connection += 1;
+                paths_found = target;
+
+            // If success, count the path and mark all the sensors with predecessors as "used"
+            } else {
+                paths_found += 1;  // Count the newfound path
+                // Unravel the path, marking each sensor in it as used
+                while (path_end != INVALID_PREVIOUS_POI) {
+                    used_sensors.insert(path_end);
+                    path_end = predecessors[path_end];
+                    if (path_end == UNVISITED_SENSOR) {throw std::runtime_error("FORBIDDEN ADDRESS!");}
+                }
+                // Store if we've reached the target
+                if (paths_found >= target) {
+                    buffer[a_poi] = paths_found;
+                }
+            }
+        }
+    }
+
+    // Return the number of connected POIs
+    return has_connection;
+}
+int KCMC_Instance::get_connectivity_greedy(int buffer[], std::unordered_set<int> &inactive_sensors) {
+    return this->get_connectivity_greedy(buffer, inactive_sensors, 10);  // Default value for target
+}
+
+
+
 /* #####################################################################################################################
  * GENETIC ALGORITHM
  * */

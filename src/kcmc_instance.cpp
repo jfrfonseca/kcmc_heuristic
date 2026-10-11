@@ -252,23 +252,6 @@ int KCMC_Instance::parse_edge(const int stage, const std::string& token){
  */
 
 
-/** Coverage getter
- * Gets the coverage at each POI, and the number of POIs with any coverage at all
- */
-int KCMC_Instance::get_coverage(int buffer[], std::unordered_set<int> &inactive_sensors) {
-
-    // For each POI, count its coverage and if it has coverage at all
-    int has_coverage = 0;
-    for (int n_poi=0; n_poi < this->num_pois; n_poi++) {
-        buffer[n_poi] = (int)(set_diff(poi_sensor[n_poi], inactive_sensors).size());
-        has_coverage += buffer[n_poi] > 0 ? 1 : 0;
-    }
-
-    // Return the number of POIs that have any coverage at all
-    return has_coverage;
-}
-
-
 /** Degree Getter
  * Gets the degree of each active sensor, and the number of sensors with degre larger than 0
  */
@@ -359,14 +342,16 @@ bool KCMC_Instance::validate(const bool raise, const int k, const int m,
                              std::unordered_set<int> *m_used_sensors,
                              bool use_greedy) {
     int valid;
+    std::string key = this->key(), notice;
+    if (use_greedy) { notice = "GREEDY"; } else { notice = "DINITZ"; }
 
     // Check validity, recovering the used sensors for K coverage and M connectivity
     try {
         valid = this->k_coverage(k, inactive_sensors, k_used_sensors);
-        if (valid != -1) { throw std::runtime_error("INVALID INSTANCE! (INSUFFICIENT COVERAGE)"); }
+        if (valid != -1) { throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT COVERAGE '" + notice + "')"); }
     }
     catch (const std::exception &exc) {
-        if (raise) {throw std::runtime_error("INVALID INSTANCE! (INSUFFICIENT COVERAGE)");}
+        if (raise) {throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT COVERAGE '" + notice + "')");}
         else {return false;}
     }
 
@@ -376,10 +361,10 @@ bool KCMC_Instance::validate(const bool raise, const int k, const int m,
         } else {
             valid = this->m_connectivity(m, inactive_sensors, m_used_sensors);
         }
-        if (valid != -1) { throw std::runtime_error("INVALID INSTANCE! (INSUFFICIENT CONNECTIVITY)"); }
+        if (valid != -1) { throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT CONNECTIVITY '" + notice + "')"); }
     }
     catch (const std::exception &exc) {
-        if (raise) {throw std::runtime_error("INVALID INSTANCE! (INSUFFICIENT CONNECTIVITY)");}
+        if (raise) {throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT CONNECTIVITY '" + notice + "')");}
         else {return false;}
     }
     return true;

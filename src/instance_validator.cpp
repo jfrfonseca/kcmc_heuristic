@@ -1,6 +1,6 @@
 /*
- * KCMC Instance evaluator
- * Evaluates instances for the KCMC problem. Operates like an UNIX filter
+ * KCMC Instance validator
+ * Validates the instances for the KCMC problem. Operates like an UNIX filter
  */
 
 
@@ -21,7 +21,7 @@
     for (int i=0; i<argc; i++) {std::cout << argv[i] << " ";}
     std::cout << std::endl;
     std::cout << "Please, use the correct input for the KCMC instance evaluator:" << std::endl << std::endl;
-    std::cout << "./instance_evaluator <p> <s> <k> <area_s> <cov_v> <com_r> <seed> <kcmc_k> <kcmc_m> <s>*" << std::endl;
+    std::cout << "./instance_validator <p> <s> <k> <area_s> <cov_v> <com_r> <seed> <kcmc_k> <kcmc_m> <s>*" << std::endl;
     std::cout << "  where:" << std::endl << std::endl;
     std::cout << "p > 0 is the number of POIs to be randomly generated" << std::endl;
     std::cout << "s > 0 is the number of Sensors to be generated" << std::endl;

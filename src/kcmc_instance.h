@@ -24,6 +24,8 @@
 // Sentinels & Hard Limits
 #define LARGE_NUMBER 1000000
 #define MAX_M_CONNECTIVITY 100
+#define UNVISITED_SENSOR -2
+#define INVALID_PREVIOUS_POI -1
 #define INVALID_REVERSE_EDGE -10
 #define MAX_GENERATION_ATTEMPTS 1000
 #define USE_GREEDY true
@@ -106,26 +108,11 @@ std::unordered_set<int> set_intersection(const std::unordered_set<int> &left, co
 void setify(std::unordered_set<int> &target, int size, int source[], int reference);
 void setify(std::unordered_set<int> &target, std::unordered_map<int, int> *reference);
 
-
-/* FLOW NETWORK
- * Internal representation of the Network Flow used in the KCMC instance.
- * NetworkFlowNode is a wrapper around the original Node, used in the network representation of the instance, since every node gets two network nodes (in and out).
- * NetworkFlowEdge is an edge in the network flow representation, containing the source and target nodes, current flow, maximum flow, and the index of the reverse edge in the edges array.
- */
-
-struct NetworkFlowNode {
-    Node *original_node;
-    int network_node_type;
+struct Edge {
+    int target_sensor;
+    int flow;
+    int capacity;
 };
-
-struct NetworkFlowEdge {
-    NetworkFlowNode source;
-    NetworkFlowNode target;
-    int current_flow;
-    int max_flow;
-    int idx_reverse_edge;
-};
-
 
 // #####################################################################################################################
 
@@ -154,8 +141,6 @@ class KCMC_Instance {
          * Also a vector for the Network nodes and another for the Network edges.
          */
         std::vector<Node> poi, sensor, sink;
-        std::vector<NetworkFlowNode> network_nodes;
-        std::vector<NetworkFlowEdge> network_edges;
 
         /* Graph edges sparse matrix
          * Separate HashMaps of UnorderedSet of indexes of Nodes for poi-sensor, sensor-sensor and sensor-sink edges.
@@ -184,19 +169,20 @@ class KCMC_Instance {
          * Gets the degree of each sensor in the instance considering the given set of inactive sensors.
          * Shows the placements of POIs, sensors, and sinks in the instance.
          * Invert a set of sensors (get every sensor in the instance not in the set)
+         * Compute the level graph of the instance considering the given set of inactive sensors (get the lowest distance in hops from each active sensor to the nearest sink using only active sensors)
          */
         std::string key() const;
         std::string serialize();
         int get_degree(int buffer[], std::unordered_set<int> &inactive_sensors);
         void get_placements(Placement *pl_pois, Placement *pl_sensors, Placement *pl_sinks);
         int invert_set(std::unordered_set<int> &source_set, std::unordered_set<int> *target_set);
+        int compute_level_graph(std::vector<int> &level_graph, std::unordered_set<int> &inactive_sensors);
 
         /* Instance payload services - K-COVERAGE
          * Work both in GREEDY and DINITZ versions of the heuristics
          * Get coverage is retrieves the number of sensors covering each POI in the instance.
          * Validates k-coverage in the instance considering the given set of inactive sensors
          */
-        int get_coverage(int buffer[], std::unordered_set<int> &inactive_sensors);
         int k_coverage(int k, std::unordered_set<int> &inactive_sensors);
         int k_coverage(int k, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> *all_used_sensors);
 
@@ -206,12 +192,9 @@ class KCMC_Instance {
          * See below why the GREEDY version does not always works
          * Validates m-connectivity in the instance considering the given set of inactive sensors
          */
-        int greedy_level_graph(std::vector<int> &greedy_level_graph, std::unordered_set<int> &inactive_sensors);
         int m_connectivity_greedy(int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *all_used_sensors, int path_increase_tolerance);
         int m_connectivity_greedy(int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *all_used_sensors);
         int m_connectivity_greedy(int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> *all_used_sensors);
-        int get_connectivity_greedy(int buffer[], std::unordered_set<int> &inactive_sensors, int target);
-        int get_connectivity_greedy(int buffer[], std::unordered_set<int> &inactive_sensors);
 
         /* Instance Preprocessors - GREEDY heuristic
          * We compute a level graph using an heuristic based on a misunderstanding of the implications of Menger's Theorem on Dinitz's algorithm.
@@ -244,8 +227,6 @@ class KCMC_Instance {
         // METHODS FOR THE DINITZ HEURISTIC ---------------------------------------------------------------------------
         int m_connectivity(int m, std::unordered_set<int> &inactive_sensors);
         int m_connectivity(int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> *all_used_sensors);
-        //int get_connectivity(int buffer[], std::unordered_set<int> &inactive_sensors, int target);
-        //int get_connectivity(int buffer[], std::unordered_set<int> &inactive_sensors);
 
         // METHODS THAT MAY USE THE GREEDY OR THE DINITZ HEURISTICS ---------------------------------------------------
 

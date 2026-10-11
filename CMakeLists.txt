@@ -23,9 +23,9 @@ ADD_EXECUTABLE(instance_generator src/instance_generator.cpp)
 target_link_libraries(instance_generator KCMC_Module)
 
 
-# Instance evaluator ----------------------------------------------------------
-ADD_EXECUTABLE(instance_evaluator src/instance_evaluator.cpp)
-target_link_libraries(instance_evaluator KCMC_Module)
+# Instance validator ----------------------------------------------------------
+ADD_EXECUTABLE(instance_validator src/instance_validator.cpp)
+target_link_libraries(instance_validator KCMC_Module)
 
 
 #ADD_EXECUTABLE(photogenic_instance_generator src/photogenic_instance_generator.cpp)

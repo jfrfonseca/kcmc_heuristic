@@ -27,11 +27,11 @@ services:
       - ./data:/data:rw
       - ./src:/src:ro
 
-  instance_evaluator:
+  instance_validator:
     # Instances evaluator
     profiles:
-      - instance_evaluator
-    command: '/src/run_instance_evaluator.sh'
+      - instance_validator
+    command: '/src/run_instance_validator.sh'
     build:
       dockerfile: instance_generator.dockerfile
       context: .

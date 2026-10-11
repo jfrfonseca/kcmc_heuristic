@@ -9,10 +9,6 @@
 // Dependencies from this package
 #include "kcmc_instance.h"  // KCMC Instance class headers
 
-// Constants to improve readability
-constexpr int UNVISITED_SENSOR = -2;
-constexpr int INVALID_PREVIOUS_POI = -1;
-
 
 /** GREEDY DKOV
  * Use the greedy heuristic to get sensors enough for m-connectivity, and then add sensors to also achieve k-coverage.
