@@ -348,7 +348,7 @@ bool KCMC_Instance::validate(const bool raise, const int k, const int m,
     // Check validity, recovering the used sensors for K coverage and M connectivity
     try {
         valid = this->k_coverage(k, inactive_sensors, k_used_sensors);
-        if (valid != -1) { throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT COVERAGE '" + notice + "')"); }
+        if (valid != INVALID_PREVIOUS_POI) { throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT COVERAGE '" + notice + "')"); }
     }
     catch (const std::exception &exc) {
         if (raise) {throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT COVERAGE '" + notice + "')");}
@@ -361,7 +361,7 @@ bool KCMC_Instance::validate(const bool raise, const int k, const int m,
         } else {
             valid = this->m_connectivity(m, inactive_sensors, m_used_sensors);
         }
-        if (valid != -1) { throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT CONNECTIVITY '" + notice + "')"); }
+        if (valid != INVALID_PREVIOUS_POI) { throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT CONNECTIVITY '" + notice + "')"); }
     }
     catch (const std::exception &exc) {
         if (raise) {throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT CONNECTIVITY '" + notice + "')");}

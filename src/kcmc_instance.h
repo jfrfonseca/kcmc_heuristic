@@ -28,7 +28,7 @@
 #define INVALID_PREVIOUS_POI -1
 #define INVALID_REVERSE_EDGE -10
 #define MAX_GENERATION_ATTEMPTS 1000
-#define USE_GREEDY true
+#define USE_GREEDY_TO_GENERATE_INSTANCES false
 
 // GenAlg
 //#define INSPECTION_FREQUENCY 100
@@ -108,11 +108,14 @@ std::unordered_set<int> set_intersection(const std::unordered_set<int> &left, co
 void setify(std::unordered_set<int> &target, int size, int source[], int reference);
 void setify(std::unordered_set<int> &target, std::unordered_map<int, int> *reference);
 
+
 struct Edge {
-    int target_sensor;
+    int towards_sensor;
     int flow;
     int capacity;
+    int reverse_edge_index;
 };
+
 
 // #####################################################################################################################
 
@@ -263,8 +266,8 @@ class KCMC_Instance {
         int greedy_reuse(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors, int path_increase_tolerance);
 
         // DINITZ =================================================================================
-        // Method to compute the network flow graph from the instance
-        void compute_network_flow_graph();
+        // Method to compute m-connectivity for a specific POI
+        int m_connectivity(const int m, const int poi, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &poi_used_sensors);
 
 };
 

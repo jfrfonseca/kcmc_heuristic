@@ -95,7 +95,7 @@ int main(int argc, char* const argv[]) {
                                                    random_seed);
 
                 // If the instance is valid, stop trying and print it
-                if (instance->validate(false, kcmc_k, kcmc_m, USE_GREEDY)) {
+                if (instance->validate(false, kcmc_k, kcmc_m, USE_GREEDY_TO_GENERATE_INSTANCES)) {
                     success = true;
                     printf("KCMC;%s;END | (K%dM%d)\n", instance->key().c_str(), kcmc_k, kcmc_m);
                     attempt = 2*MAX_GENERATION_ATTEMPTS;
