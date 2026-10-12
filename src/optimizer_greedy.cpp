@@ -13,22 +13,22 @@
 /** GREEDY DKOV
  * Use the greedy heuristic to get sensors enough for m-connectivity, and then add sensors to also achieve k-coverage.
  */
-int KCMC_Instance::greedy_dkov(const int k, const int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors) {
+int KCMC_Instance::greedy_dkov(const int k, const int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution) {
 
     // Local buffers
     int num_paths, p, missing_coverage, pre_k_cov_sensors;
     std::unordered_set<int> set_used_sensors, poi_covering_sensors, pois_missing_coverage;
 
     // We run the greedy M-connectivity normally
-    visited_sensors->clear();
-    num_paths = this->m_connectivity_greedy(m, inactive_sensors, visited_sensors);
+    solution.clear();
+    num_paths = this->m_connectivity_greedy(m, inactive_sensors, solution);
     if (num_paths >= LARGE_NUMBER) {
         throw std::runtime_error("Failed to find " + std::to_string(m) + " paths for POI " + std::to_string((num_paths/LARGE_NUMBER)-1) + " (only found " + std::to_string(num_paths%LARGE_NUMBER) + ")");
     }
 
     // Run the ADD-KCOV procedure to ensure k-coverage
-    pre_k_cov_sensors = ((int)(visited_sensors->size()));
-    this->add_kcov(k, visited_sensors);
+    pre_k_cov_sensors = ((int)(solution.size()));
+    this->add_kcov(k, solution);
     return pre_k_cov_sensors;
 }
 
@@ -40,18 +40,19 @@ int KCMC_Instance::greedy_dkov(const int k, const int m, std::unordered_set<int>
  * Each POI gives one vote for each sensor in its paths to the SINKs.
  * This is the PRIVATE version, that is used in heuristic GREEDY REUSE when path_increase_tolerance < 0, and GREEDY BREADTH when path_increase_tolerance = 0.
  */
-int KCMC_Instance::greedy_reuse(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors, int path_increase_tolerance) {
+int KCMC_Instance::greedy_reuse(int k, int m, std::unordered_set<int> &inactive_sensors, int path_increase_tolerance, std::unordered_set<int> &solution) {
 
     // Local buffers
     int num_paths, paths_found, path_end, a_poi, active_covering_sensors, add_sensor, pre_k_cov_sensors;
     std::vector<int> inv_frequency_array(this->num_sensors), predecessors(this->num_sensors);
 
     // First we clear out the output buffer
-    // The visited_sensors map will be populated by the m_connectivity_greedy method with the number of paths each sensor is part of.
-    visited_sensors->clear();
+    // The voting_results map will be populated by the m_connectivity_greedy method with the number of paths each sensor is part of.
+    std::unordered_map<int, int> voting_results;
+    solution.clear();
 
     // We run M-connectivity with an M that is infinity (or a very large number)
-    num_paths = this->m_connectivity_greedy(LARGE_NUMBER, inactive_sensors, visited_sensors, path_increase_tolerance);
+    num_paths = this->m_connectivity_greedy(LARGE_NUMBER, inactive_sensors, solution, path_increase_tolerance);
 
     /* Then format the frequency graph as a vector for minimization, similar to the level-graph
      * This is called the *inverse frequency array* (IFA). It holds no values smaller than 1.
@@ -60,11 +61,11 @@ int KCMC_Instance::greedy_reuse(int k, int m, std::unordered_set<int> &inactive_
      * This inversion is done so the minimization loop can still be used
      */
     std::fill(inv_frequency_array.begin(), inv_frequency_array.end(), num_paths);
-    for (const auto &i : *visited_sensors) {inv_frequency_array[i.first] = num_paths - i.second;}
+    for (const auto &i : solution) {inv_frequency_array[i] = num_paths - 1;}  // Each sensor in the solution is part of at least one path
 
     // Prepare the set of "used" sensors and clear the map of visited sensors
-    std::unordered_set<int> used_sensors, set_visited_sensors, final_inactive_sensors;
-    visited_sensors->clear();
+    std::unordered_set<int> used_sensors;
+    voting_results.clear();
 
     // Run for each POI, returning at the first failure
     for (a_poi=0; a_poi < this->num_pois; a_poi++) {
@@ -85,7 +86,7 @@ int KCMC_Instance::greedy_reuse(int k, int m, std::unordered_set<int> &inactive_
                 // Unravel the path, marking each sensor in it as used
                 while (path_end != INVALID_PREVIOUS_POI) {
                     used_sensors.insert(path_end);
-                    vote(*visited_sensors, path_end);  // Get the complete frequency map of all used sensors
+                    vote(voting_results, path_end);  // Get the complete frequency map of all used sensors
                     path_end = predecessors[path_end];
                     if (path_end == UNVISITED_SENSOR) {throw std::runtime_error("FORBIDDEN ADDRESS!");}
                 }
@@ -94,13 +95,18 @@ int KCMC_Instance::greedy_reuse(int k, int m, std::unordered_set<int> &inactive_
     }
 
     // Run the ADD-KCOV procedure to ensure k-coverage
-    pre_k_cov_sensors = (int)(visited_sensors->size());
-    this->add_kcov(k, visited_sensors);
+    for (const auto &sensor : voting_results) {solution.insert(sensor.first);}
+    pre_k_cov_sensors = (int)(solution.size());
+    this->add_kcov(k, solution);
     return pre_k_cov_sensors;
 }
-int KCMC_Instance::greedy_reuse(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors) {
-    return this->greedy_reuse(k, m, inactive_sensors, visited_sensors, -1);  // No tolerance for path increases
+
+
+int KCMC_Instance::greedy_reuse(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution) {
+    return this->greedy_reuse(k, m, inactive_sensors, -1, solution);  // No tolerance for path increases
 }
-int KCMC_Instance::greedy_breadth(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors) {
-    return this->greedy_reuse(k, m, inactive_sensors, visited_sensors, 0);  // Tolerance for non-increasing paths
+
+
+int KCMC_Instance::greedy_breadth(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution) {
+    return this->greedy_reuse(k, m, inactive_sensors, 0, solution);  // Tolerance for non-increasing paths
 }

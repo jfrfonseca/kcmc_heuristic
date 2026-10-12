@@ -155,7 +155,7 @@ int KCMC_Instance::m_connectivity(
     const int m,    // Constant - minimal number of disjoint paths to find
     const int poi,  // Loop pointer - the current POI
     std::unordered_set<int> &inactive_sensors,  // Loop invariant - the set of sensors that are currently inactive
-    std::unordered_set<int> &poi_used_sensors   // Output buffer - The sensors used in the paths for this POI
+    std::unordered_map<int,int> &poi_used_sensors   // Output buffer - The sensors used in the paths for this POI, mapping to the number of its path
 ) {
 
     // Buffers
@@ -351,7 +351,7 @@ int KCMC_Instance::m_connectivity(
 
             // Add the next sensor to the registry of outputs
             path.push_back(next_sensor_in);  // IN version of the next_sensor
-            poi_used_sensors.insert(next_sensor_in);  // Add the IN version
+            poi_used_sensors[next_sensor_in] = num_path;  // Add the IN version, mapping to this path
 
             // Redirect the a_sensor to the OUT version of the next_sensor
             a_sensor_in = next_sensor_in + this->num_sensors;
@@ -360,11 +360,12 @@ int KCMC_Instance::m_connectivity(
     return INVALID_PREVIOUS_POI;  // Signal SUCCESS at the POI!
 }
 
-int KCMC_Instance::m_connectivity(int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> *all_used_sensors) {
+
+int KCMC_Instance::m_connectivity(int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &all_used_sensors) {
     // Prepare the buffers
     int poi, poi_connectivity;
-    std::unordered_set<int> poi_used_sensors;
-    all_used_sensors->clear();
+    std::unordered_map<int,int> poi_used_sensors;
+    all_used_sensors.clear();
 
     // For each POI
     for (poi = 0; poi < this->num_pois; ++poi) {
@@ -377,14 +378,15 @@ int KCMC_Instance::m_connectivity(int m, std::unordered_set<int> &inactive_senso
         if (poi_connectivity != INVALID_PREVIOUS_POI){throw std::runtime_error("IMPOSSIBLE CONDITION WITH CONNECTIVITY " + std::to_string(m));}
 
         // If we got here, success for the POI! Lets add all the used sensors to the set
-        for (const auto a_sensor : poi_used_sensors) {all_used_sensors->insert(a_sensor);}
+        for (const auto &entry : poi_used_sensors) {all_used_sensors.insert(entry.first);}
     }
 
     // Here, we had success in each and every POI, and the all_used_sensors set contains all the sensors we used
     return -1;  // Success in each and every POI, not the total value of connectivity!
 }
 
+
 int KCMC_Instance::m_connectivity(int m, std::unordered_set<int> &inactive_sensors) {
     std::unordered_set<int> emptyset;
-    return this->m_connectivity(m, inactive_sensors, &emptyset);
+    return this->m_connectivity(m, inactive_sensors, emptyset);
 }

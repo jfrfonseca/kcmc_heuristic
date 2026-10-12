@@ -325,6 +325,7 @@ std::string KCMC_Instance::serialize() {
     return out.str();
 }
 
+
 int KCMC_Instance::invert_set(std::unordered_set<int> &source_set, std::unordered_set<int> *target_set) {
     target_set->clear();
     for (int i=0; i<this->num_sensors; i++) {
@@ -338,8 +339,8 @@ int KCMC_Instance::invert_set(std::unordered_set<int> &source_set, std::unordere
 
 bool KCMC_Instance::validate(const bool raise, const int k, const int m,
                              std::unordered_set<int> &inactive_sensors,
-                             std::unordered_set<int> *k_used_sensors,
-                             std::unordered_set<int> *m_used_sensors,
+                             std::unordered_set<int> &k_used_sensors,
+                             std::unordered_set<int> &m_used_sensors,
                              bool use_greedy) {
     int valid;
     std::string key = this->key(), notice;
@@ -369,10 +370,12 @@ bool KCMC_Instance::validate(const bool raise, const int k, const int m,
     }
     return true;
 }
+
+
 bool KCMC_Instance::validate(const bool raise, const int k, const int m,
                              std::unordered_set<int> &inactive_sensors,
-                             std::unordered_set<int> *k_used_sensors,
-                             std::unordered_set<int> *m_used_sensors) {
+                             std::unordered_set<int> &k_used_sensors,
+                             std::unordered_set<int> &m_used_sensors) {
     return this->validate(raise, k, m, inactive_sensors, k_used_sensors, m_used_sensors, false);
 }
 
@@ -382,15 +385,19 @@ bool KCMC_Instance::validate(const bool raise, const int k, const int m,
                              bool use_greedy) {
     // Prepare the ignored results buffer and the empty set of inactive sensors
     std::unordered_set<int> ignored;
-    return this->validate(raise, k, m, inactive_sensors, &ignored, &ignored, use_greedy);
+    return this->validate(raise, k, m, inactive_sensors, ignored, ignored, use_greedy);
 }
+
+
 bool KCMC_Instance::validate(const bool raise, const int k, const int m, bool use_greedy) {
     // Prepare the ignored results buffer and the empty set of inactive sensors
-    std::unordered_set<int> emptyset;
-    return this->validate(raise, k, m, emptyset, use_greedy);
+    std::unordered_set<int> ignored;
+    return this->validate(raise, k, m, ignored, ignored, ignored, use_greedy);
 }
+
+
 bool KCMC_Instance::validate(const bool raise, const int k, const int m) {
     // Prepare the ignored results buffer and the empty set of inactive sensors
-    std::unordered_set<int> emptyset;
-    return this->validate(raise, k, m, emptyset, false);
+    std::unordered_set<int> ignored;
+    return this->validate(raise, k, m, ignored, ignored, ignored, false);
 }

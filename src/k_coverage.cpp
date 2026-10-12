@@ -123,9 +123,9 @@ void setify(std::unordered_set<int> &target, int size, int source[], int referen
 }
 
 
-void setify(std::unordered_set<int> &target, std::unordered_map<int, int> *reference) {
+void setify(std::unordered_set<int> &target, std::unordered_map<int, int> reference) {
     target.clear();
-    for (const auto &i : *reference) {target.insert(i.first);}
+    for (const auto &i : reference) {target.insert(i.first);}
 }
 
 
@@ -160,23 +160,21 @@ int KCMC_Instance::k_coverage(const int k, std::unordered_set<int> &inactive_sen
 /** K-Coverage Validator that also returns the used sensors in k coverage
  * Very trivial k-coverage validator
  */
-int KCMC_Instance::k_coverage(const int k, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> *result_buffer) {
-    // Clear the set of active sensors
-    result_buffer->clear();
+int KCMC_Instance::k_coverage(const int k, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution) {
 
     // Base case
     if (k < 1){return -1;}
 
     // Start buffers
-    std::unordered_set<int> buffer_set, all_used_sensors;
+    std::unordered_set<int> poi_solution;
     unsigned long active_coverage;
 
     // For each POI, count its coverage, returning and error if insufficient. Also note all used sensors
+    solution.clear();
     for (int n_poi=0; n_poi < this->num_pois; n_poi++) {
-        buffer_set = set_diff(this->poi_sensor[n_poi], inactive_sensors);
-        active_coverage = buffer_set.size();
-        all_used_sensors = set_merge(all_used_sensors, buffer_set);
-        *result_buffer = all_used_sensors;
+        poi_solution = set_diff(this->poi_sensor[n_poi], inactive_sensors);
+        active_coverage = poi_solution.size();
+        solution = set_merge(solution, poi_solution);
         if (active_coverage < k) {
             return (n_poi*1000000)+(int)(active_coverage);
         }
@@ -237,13 +235,10 @@ int KCMC_Instance::compute_level_graph(std::vector<int> &level_graph, std::unord
 }
 
 
-int KCMC_Instance::add_kcov(const int k, std::unordered_map<int, int> *visited_sensors) {
+int KCMC_Instance::add_kcov(const int k, std::unordered_set<int> &visited_sensors) {
     int p, missing_coverage, i, coverage_contribution, qt_added=0;
-    std::unordered_set<int> pois_missing_coverage, set_used_sensors, poi_covering_sensors;
+    std::unordered_set<int> pois_missing_coverage, poi_covering_sensors;
     std::priority_queue<std::pair<int, int>> queue;
-
-    // Get all visited sensors as a set for easier intersection calculations
-    setify(set_used_sensors, visited_sensors);
 
     // Do a first loop
     do {
@@ -252,7 +247,7 @@ int KCMC_Instance::add_kcov(const int k, std::unordered_map<int, int> *visited_s
             poi_covering_sensors = this->poi_sensor[p];
 
             // Get how much coverage the POI is still missing, using olny the set of used sensors
-            missing_coverage = k - ((int)(set_intersection(poi_covering_sensors, set_used_sensors).size()));
+            missing_coverage = k - ((int)(set_intersection(poi_covering_sensors, visited_sensors).size()));
 
             // If we have missing coverage, add the POI to the list of POIs missing coverage
             if (missing_coverage > 0) {
@@ -264,7 +259,7 @@ int KCMC_Instance::add_kcov(const int k, std::unordered_map<int, int> *visited_s
         // For each sensor NOT in the set of used sensors
         while (!queue.empty()) {queue.pop();}  // Clear the priority queue before filling it again
         for (i = 0; i < this->num_sensors; i++) {
-            if (!isin(set_used_sensors, i)) {
+            if (!isin(visited_sensors, i)) {
 
                 // Check how many POIs this sensor covers that are missing coverage,
                 // and add this sensor to a priority queue ordered by the size of its coverage contribution
@@ -278,7 +273,7 @@ int KCMC_Instance::add_kcov(const int k, std::unordered_map<int, int> *visited_s
 
         // Add the sensor with the highest coverage contribution to the set of used sensors
         if (!queue.empty()) {
-            set_used_sensors.insert(queue.top().second);
+            visited_sensors.insert(queue.top().second);
             qt_added++;
         }
 
@@ -287,11 +282,5 @@ int KCMC_Instance::add_kcov(const int k, std::unordered_map<int, int> *visited_s
     while (!pois_missing_coverage.empty());
 
     // If we got here, every POI has enough coverage.
-    // Now we only have to add the selected sensors to the final set of used sensors
-    if (qt_added > 0) {
-        for (const int sensor : set_used_sensors) {
-            visited_sensors->insert({sensor, MAX_M_CONNECTIVITY});  // Add the sensor to the final set of used sensors, with a sentinel as its value
-        }
-    }
     return qt_added;  // Return the number of sensors added
 }

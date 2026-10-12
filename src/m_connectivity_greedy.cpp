@@ -54,10 +54,10 @@ int KCMC_Instance::greedy_find_path(const int poi_number, std::unordered_set<int
 /** M-Connectivity by the Greedy Heuristic
  * Gets the list of used sensors needed to get m-connectivity by the GREEDY heuristic.
  */
-int KCMC_Instance::m_connectivity_greedy(const int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *all_used_sensors, const int path_increase_tolerance) {
+int KCMC_Instance::m_connectivity_greedy(const int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> &voting_results, const int path_increase_tolerance) {
 
     // Clear the set of active sensors
-    all_used_sensors->clear();
+    voting_results.clear();
 
     // Base case
     if (m < 1){return INVALID_PREVIOUS_POI;}
@@ -119,7 +119,7 @@ int KCMC_Instance::m_connectivity_greedy(const int m, std::unordered_set<int> &i
                     if (current_path_step == UNVISITED_SENSOR) {throw std::runtime_error("FORBIDDEN ADDRESS!");}
 
                     poi_used_sensors.insert(current_path_step);
-                    vote(*all_used_sensors, current_path_step);  // Add a vote to the current sensor
+                    vote(voting_results, current_path_step);  // Add a vote to the current sensor
 
                     // update the path length
                     path_length += 1;
@@ -140,17 +140,29 @@ int KCMC_Instance::m_connectivity_greedy(const int m, std::unordered_set<int> &i
     // Success in each and every POI!
     return INVALID_PREVIOUS_POI;
 }
-int KCMC_Instance::m_connectivity_greedy(const int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *all_used_sensors) {
-    return this->m_connectivity_greedy(m, inactive_sensors, all_used_sensors, -1);  // No tolerance for path increases
+
+
+int KCMC_Instance::m_connectivity_greedy(const int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &all_used_sensors, const int path_increase_tolerance) {
+
+    // Buffers
+    int result;
+    std::unordered_map<int, int> voting_results;
+
+    // Compute
+    all_used_sensors.clear();
+    voting_results.clear();
+    result = this->m_connectivity_greedy(m, inactive_sensors, voting_results, path_increase_tolerance);
+    if (result != INVALID_PREVIOUS_POI) {return result;}
+
+    // Format the results and return
+    for (const auto &entry : voting_results) {
+        const int sensor = entry.first;
+        all_used_sensors.insert(sensor);
+    }
+    return INVALID_PREVIOUS_POI;
 }
-int KCMC_Instance::m_connectivity_greedy(const int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> *all_used_sensors) {
-    // Run with a map
-    std::unordered_map<int, int> buffer;
-    int result = this->m_connectivity_greedy(m, inactive_sensors, &buffer);
-    // adjust the result
-    if (result < LARGE_NUMBER) {result = INVALID_PREVIOUS_POI;}  // WE MUST HAVE FEWER THAN A LARGE_NUMBER OF PATHS!
-    // Revert back to set
-    all_used_sensors->clear();
-    for (const auto i : buffer) {all_used_sensors->insert(i.first);}
-    return result;
+
+
+int KCMC_Instance::m_connectivity_greedy(const int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &all_used_sensors) {
+    return this->m_connectivity_greedy(m, inactive_sensors, all_used_sensors, -1);  // No tolerance for path increases
 }

@@ -112,7 +112,7 @@ std::unordered_set<int> set_intersection(const std::unordered_set<int> &left, co
  * Returns a set from other data structure
  */
 void setify(std::unordered_set<int> &target, int size, int source[], int reference);
-void setify(std::unordered_set<int> &target, std::unordered_map<int, int> *reference);
+void setify(std::unordered_set<int> &target, std::unordered_map<int, int> reference);
 
 
 struct Edge {
@@ -193,7 +193,7 @@ class KCMC_Instance {
          * Validates k-coverage in the instance considering the given set of inactive sensors
          */
         int k_coverage(int k, std::unordered_set<int> &inactive_sensors);
-        int k_coverage(int k, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> *all_used_sensors);
+        int k_coverage(int k, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &all_used_sensors);
 
         // METHODS FOR THE GREEDY HEURISTIC ---------------------------------------------------------------------------
 
@@ -201,9 +201,8 @@ class KCMC_Instance {
          * See below why the GREEDY version does not always works
          * Validates m-connectivity in the instance considering the given set of inactive sensors
          */
-        int m_connectivity_greedy(int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *all_used_sensors, int path_increase_tolerance);
-        int m_connectivity_greedy(int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *all_used_sensors);
-        int m_connectivity_greedy(int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> *all_used_sensors);
+        int m_connectivity_greedy(int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &all_used_sensors, int path_increase_tolerance);
+        int m_connectivity_greedy(int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &all_used_sensors);
 
         /* Instance Preprocessors - GREEDY heuristic
          * We compute a level graph using an heuristic based on a misunderstanding of the implications of Menger's Theorem on Dinitz's algorithm.
@@ -229,13 +228,16 @@ class KCMC_Instance {
          * Reuse uses the full-flood to get paths. Each path votes on all its composing sensors. Then, new paths are
          *   created preferring the most voted sensors in each dinic level.
          */
-        int greedy_dkov(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors);
-        int greedy_reuse(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors);
-        int greedy_breadth(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors);
+        int greedy_dkov(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution);
+        int greedy_reuse(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution);
+        int greedy_breadth(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution);
+
+        // METHODS FOR THE DINITZ M-CONNECTIVITY ----------------------------------------------------------------------
+        int m_connectivity(int m, std::unordered_set<int> &inactive_sensors);
+        int m_connectivity(int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &all_used_sensors);
 
         // METHODS FOR THE DINITZ HEURISTIC ---------------------------------------------------------------------------
-        int m_connectivity(int m, std::unordered_set<int> &inactive_sensors);
-        int m_connectivity(int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> *all_used_sensors);
+        int dinitz_dkov(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution);
 
         // METHODS THAT MAY USE THE GREEDY OR THE DINITZ HEURISTICS ---------------------------------------------------
 
@@ -247,11 +249,11 @@ class KCMC_Instance {
         bool validate(bool raise, int k, int m, std::unordered_set<int> &inactive_sensors);
         bool validate(bool raise, int k, int m, std::unordered_set<int> &inactive_sensors, bool use_greedy);  // Option to use the greedy heuristic
         bool validate(bool raise, int k, int m, std::unordered_set<int> &inactive_sensors,
-                      std::unordered_set<int> *k_used_sensors,
-                      std::unordered_set<int> *m_used_sensors);
+                      std::unordered_set<int> &k_used_sensors,
+                      std::unordered_set<int> &m_used_sensors);
         bool validate(bool raise, int k, int m, std::unordered_set<int> &inactive_sensors,
-                      std::unordered_set<int> *k_used_sensors,
-                      std::unordered_set<int> *m_used_sensors, bool use_greedy);  // Option to use the greedy heuristic
+                      std::unordered_set<int> &k_used_sensors,
+                      std::unordered_set<int> &m_used_sensors, bool use_greedy);  // Option to use the greedy heuristic
 
     private:
         // GENERAL ================================================================================
@@ -262,19 +264,20 @@ class KCMC_Instance {
         // Method to parse the edges of a serialized instance
         int parse_edge(int stage, const std::string& token);
         // Method to add non-visited sensors to achieve k-coverage
-        int add_kcov(const int k, std::unordered_map<int, int> *visited_sensors);
+        int add_kcov(const int k, std::unordered_set<int> &visited_sensors);
 
         // GREEDY =================================================================================
         // Method that uses A* to find a path for the greedy heuristic
         int greedy_find_path(int poi_number, std::unordered_set<int> &used_sensors,
                              std::vector<int> &level_graph, std::vector<int> &predecessors);
+        // Private version that returns the voting results for the greedy heuristics
+        int m_connectivity_greedy(int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> &voting_results, int path_increase_tolerance);
         // Private version of Reuse that also implements the heuristic Breadth
-        int greedy_reuse(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> *visited_sensors, int path_increase_tolerance);
+        int greedy_reuse(int k, int m, std::unordered_set<int> &inactive_sensors, int path_increase_tolerance, std::unordered_set<int> &solution);
 
         // DINITZ =================================================================================
         // Method to compute m-connectivity for a specific POI
-        int m_connectivity(const int m, const int poi, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &poi_used_sensors);
-
+        int m_connectivity(const int m, const int poi, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> &poi_used_sensors);
 };
 
 #endif

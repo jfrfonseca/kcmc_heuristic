@@ -20,21 +20,22 @@
  * */
 
 
-void printout_short(KCMC_Instance *instance, int k, int m,
-                    const int num_sensors, const std::string operation,
-                    const long duration, std::unordered_set<int> &used_installation_spots) {
-
-    // Validate the instance
-    std::unordered_set<int> inactive_sensors;
-    instance->invert_set(used_installation_spots, &inactive_sensors);
-    bool valid = instance->validate(false, k, m, inactive_sensors);
-
-    // Reformat the used installation spots as an array of 0/1
-    std::vector<int> individual(num_sensors, 0);
-    for (const int &used_spot : used_installation_spots) { individual[used_spot] = 1; }
-
+void printout_short(
+    KCMC_Instance *instance,
+    const int kcmc_k,
+    const int kcmc_m,
+    const std::string pre_heuristic,
+    const long duration,
+    std::unordered_set<int> &solution
+) {
     // Prepare the output buffer
     std::ostringstream out;
+    std::vector<int> used_sensors;
+
+    // Sort the used sensors in the solution
+    used_sensors.resize((int)solution.size());
+    std::copy(solution.begin(), solution.end(), used_sensors.begin());
+    std::sort(used_sensors.begin(), used_sensors.end());
 
     // Print a line with:
     // - The key of the instance
@@ -42,33 +43,42 @@ void printout_short(KCMC_Instance *instance, int k, int m,
     // - The amount of microsseconds the method needed to run
     // - The number of used installation spots
     // - The resulting map of the instance, as a binary of num_sensors bits
-    out << instance->key() << "\t" << k << "\t" << m
-        << "\t" << operation
+    out << instance->key() << "\t" << kcmc_k << "\t" << kcmc_m
+        << "\t" << pre_heuristic
         << "\t" << duration
-        << "\t" << (valid ? "OK" : "INVALID")
-        << "\t" << used_installation_spots.size()
-        << "\t" << std::fixed << std::setprecision(5) << (double)(inactive_sensors.size()) / (double)num_sensors
+        << "\t" << solution.size()
         << "\t";
-    for (int i=0; i<num_sensors; i++) {out << individual[i];}
+    for (const int i : used_sensors) {out << " " << i;}
     // Flush
     std::cout << out.str() << std::endl;
 }
 
 
-void help() {
+ void help(int argc, char* const argv[]) {
+    std::cout << "RECEIVED LINE (" << argc << "): ";
+    for (int i=0; i<argc; i++) {std::cout << argv[i] << " ";}
+    std::cout << std::endl;
     std::cout << "Please, use the correct input for the KCMC instance heuristic optimizer:" << std::endl << std::endl;
-    std::cout << "./optimizer_dinic <instance> <k> <m>" << std::endl;
+    std::cout << "./optimizer <p> <s> <k> <area_s> <cov_v> <com_r> <seed> <kcmc_k> <kcmc_m> <s>*" << std::endl;
     std::cout << "  where:" << std::endl << std::endl;
-    std::cout << "<instance> is the serialized KCMC instance" << std::endl;
-    std::cout << "Integer 0 < K < 10 is the desired K coverage" << std::endl;
-    std::cout << "Integer 0 < M < 10 is the desired M connectivity" << std::endl;
-    std::cout << "K migth be the pair K,M in the format (K{k}M{m}). In this case M is ignored" << std::endl;
+    std::cout << "p > 0 is the number of POIs to be randomly generated" << std::endl;
+    std::cout << "  if p is in one of the special cases, the corresponding instance will be used and all further parameters will be ignored" << std::endl;
+    std::cout << "  if p=0, the 'Sao Paulo' instance will be used: 'KCMC;1 6 1;10 4 6;0;PS;0 0;0 2;SS;0 1;0 4;2 3;4 5;3 1;SK;1 0;5 0;' for K=2 M=1" << std::endl;
+    std::cout << "s > 0 is the number of Sensors to be generated" << std::endl;
+    std::cout << "k > 0 is the number of Sinks to be generated. If n=1, the sink will be placed at the center of the area" << std::endl;
+    std::cout << "area > 0.0 is the int length of the square area where features will be placed" << std::endl;
+    std::cout << "cov_r > 0.0 is the int radius around a Sensor where it can cover POIs" << std::endl;
+    std::cout << "com_r > 0.0 is the int radius around a Sensor where it can communicate with other Sensors or Sinks" << std::endl << std::endl;
+    std::cout << "seed is an integer number that is used as seed of the PRNG." << std::endl;
+    std::cout << "kcmc_k > 0 is the K parameter for the KCMC problem" << std::endl;
+    std::cout << "kcmc_m > 0 is the M parameter for the KCMC problem" << std::endl;
+    std::cout << "s* is an optional list of inactive sensors (by their indices)" << std::endl;
     exit(0);
 }
 
 
 int main(int argc, char* const argv[]) {
-    if (argc < 3) { help(); }
+    if ((argc != 2) && (argc < 9)) { help(argc, argv); }
 
     // Registers the signal handlers
     signal(SIGINT, exit_signal_handler);
@@ -83,28 +93,40 @@ int main(int argc, char* const argv[]) {
 #endif
 
     // Buffers
-    int k, m, num_paths;
-    std::string serialized_instance, alt_k;
-    std::unordered_set<int> emptyset, seed_sensors, set_used_installation_spots;
-    std::unordered_map<int, int> used_installation_spots;
+    int p, s, k, area_s, cov_v, com_r, kcmc_k, kcmc_m, arg_index;
+    long long seed;
+    std::unordered_set<int> inactive_sensors, solution;
+    KCMC_Instance* instance = nullptr;
 
-    /* Parse base Arguments
-     * Serialized KCMC Instance (will be immediately de-serialized)
-     * KCMC K and M parameters
-     * */
-    auto *instance = new KCMC_Instance(argv[1]);
-    alt_k = argv[2];
-    std::transform(
-        alt_k.begin(), alt_k.end(), alt_k.begin(),
-        [](unsigned char c) { return static_cast<char>(std::toupper(c)); }
-   );
-    if (alt_k.find('K') != std::string::npos) {
-        k = alt_k.at(1) - '0';  // ONLY FOR K,M < 10!!!
-        m = alt_k.at(3) - '0';  // ONLY FOR K,M < 10!!!
+    p = atoi(argv[1]);
+    if (p == 0) {
+        printf("Using the 'Sao Paulo' instance for K=2 M=1\n");
+        kcmc_k = 2;
+        kcmc_m = 1;
+        instance = new KCMC_Instance("KCMC;1 6 1;10 4 6;0;PS;0 0;0 2;SS;0 1;0 4;2 3;4 5;1 3;SK;1 0;5 0;");
+
     } else {
-        if (argc < 4) { help(); } // argv[3] is required here
-        k = std::stoi(argv[2]);
-        m = std::stoi(argv[3]);
+        s = atoi(argv[2]);
+        k = atoi(argv[3]);
+        if (p <= 0 || s <= 0 || k <= 0) {throw std::invalid_argument("Invalid Pois, Sensors or Sinks parameters.");}
+        area_s = atoi(argv[4]);
+        cov_v = atoi(argv[5]);
+        com_r = atoi(argv[6]);
+        if (area_s <= 0 || cov_v <= 0 || com_r <= 0) {throw std::invalid_argument("Invalid area, coverage or communication parameters.");}
+        seed = atoll(argv[7]);
+        kcmc_k = atoi(argv[8]);
+        kcmc_m = atoi(argv[9]);
+        if (kcmc_k <= 0 || kcmc_m <= 0 || s <= kcmc_k) {throw std::invalid_argument("Invalid KCMC_K or KCMC_M parameters.");}
+
+        // Parse the inactive sensors
+        if (argc > 9) {for (arg_index=10; arg_index<argc; arg_index++){inactive_sensors.insert(atoi(argv[arg_index]));}}
+
+        // De-serialize the actual instance
+        instance = new KCMC_Instance(
+            p, s, k,
+            area_s, cov_v, com_r,
+            seed
+        );
     }
 
     // Prepare the clock buffers
@@ -113,89 +135,43 @@ int main(int argc, char* const argv[]) {
     long duration;
 
     // Print the header
-    // printf("Key\tK\tM\tOperation\tRuntime\tValid\tObjective\tCompression\tSolution\n");
+    printf("Instance\tKCMC_K\tKCMC_M\tPreHeuristic\tRuntime\tNumSensorsUsed\tUsedSensors\n");
 
-    // Validate the whole instance, getting the first local optima using DINIC Algorithm
-    set_used_installation_spots.clear();
+    // GREEDY =====================================================================================
+
+    // GREEDY DKOV
+    solution.clear();
     start = std::chrono::high_resolution_clock::now();
-    instance->local_optima(k, m, emptyset, &set_used_installation_spots);
+    instance->greedy_dkov(kcmc_k, kcmc_m, inactive_sensors, solution);
     end = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    printout_short(instance, k, m, instance->num_sensors,
-                   "dinic",
-                   duration, set_used_installation_spots);
+    printout_short(instance, kcmc_k, kcmc_m, "greedy_dkov", duration, solution);
 
-    // Process the Minimal-Flood mapping of the instance
-    used_installation_spots.clear();
+    // GREEDY REUSE
+    solution.clear();
     start = std::chrono::high_resolution_clock::now();
-    num_paths = instance->flood(k, m, false, emptyset, &used_installation_spots);
+    instance->greedy_reuse(kcmc_k, kcmc_m, inactive_sensors, solution);
     end = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    set_used_installation_spots.clear();
-    setify(set_used_installation_spots, &used_installation_spots);
-    printout_short(instance, k, m, instance->num_sensors,
-                   "min_flood_" + std::to_string(num_paths),  // Add the number of paths found
-                   duration, set_used_installation_spots);
+    printout_short(instance, kcmc_k, kcmc_m, "greedy_reuse", duration, solution);
 
-    // Process the Max-Flood mapping of the instance
-    used_installation_spots.clear();
+    // GREEDY BREADTH
+    solution.clear();
     start = std::chrono::high_resolution_clock::now();
-    num_paths = instance->flood(k, m, true, emptyset, &used_installation_spots);
+    instance->greedy_breadth(kcmc_k, kcmc_m, inactive_sensors, solution);
     end = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    set_used_installation_spots.clear();
-    setify(set_used_installation_spots, &used_installation_spots);
-    printout_short(instance, k, m, instance->num_sensors,
-                   "max_flood_" + std::to_string(num_paths),  // Add the number of paths found
-                   duration, set_used_installation_spots);
+    printout_short(instance, kcmc_k, kcmc_m, "greedy_breadth", duration, solution);
 
-    // Process the No-Flood Reuse mapping of the instance
-    used_installation_spots.clear();
+    // DINITZ =====================================================================================
+
+    // DINITZ DKOV
+    solution.clear();
     start = std::chrono::high_resolution_clock::now();
-    num_paths = instance->reuse(k, m, 0,emptyset, &used_installation_spots);
+    instance->dinitz_dkov(kcmc_k, kcmc_m, inactive_sensors, solution);
     end = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    set_used_installation_spots.clear();
-    setify(set_used_installation_spots, &used_installation_spots);
-    printout_short(instance, k, m, instance->num_sensors,
-                   "no_reuse_" + std::to_string(num_paths),  // Add the number of added sensors for k-coverage
-                   duration, set_used_installation_spots);
-
-    // Process the Min-Flood Reuse mapping of the instance
-    used_installation_spots.clear();
-    start = std::chrono::high_resolution_clock::now();
-    num_paths = instance->reuse(k, m, 1,emptyset, &used_installation_spots);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    set_used_installation_spots.clear();
-    setify(set_used_installation_spots, &used_installation_spots);
-    printout_short(instance, k, m, instance->num_sensors,
-                   "min_reuse_" + std::to_string(num_paths),  // Add the number of added sensors for k-coverage
-                   duration, set_used_installation_spots);
-
-    // Process the Max-Flood Reuse mapping of the instance
-    used_installation_spots.clear();
-    start = std::chrono::high_resolution_clock::now();
-    num_paths = instance->reuse(k, m, -1,emptyset, &used_installation_spots);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    set_used_installation_spots.clear();
-    setify(set_used_installation_spots, &used_installation_spots);
-    printout_short(instance, k, m, instance->num_sensors,
-                   "max_reuse_" + std::to_string(num_paths),  // Add the number of added sensors for k-coverage
-                   duration, set_used_installation_spots);
-
-    // Process the Best-Reuse mapping of the instance
-    used_installation_spots.clear();
-    start = std::chrono::high_resolution_clock::now();
-    num_paths = instance->reuse(k, m,emptyset, &used_installation_spots);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    set_used_installation_spots.clear();
-    setify(set_used_installation_spots, &used_installation_spots);
-    printout_short(instance, k, m, instance->num_sensors,
-                   "best_reuse_" + std::to_string(num_paths),  // Add the number of added sensors for k-coverage
-                   duration, set_used_installation_spots);
+    printout_short(instance, kcmc_k, kcmc_m, "dinitz_dkov", duration, solution);
 
     return 0;
 }

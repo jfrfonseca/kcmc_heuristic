@@ -11,6 +11,7 @@ ADD_LIBRARY(KCMC_Module
             src/m_connectivity_dinitz.cpp
             src/optimizer_greedy.cpp
             src/m_connectivity_dinitz.cpp
+            src/optimizer_dinitz.cpp
             src/kcmc_instance.h
             #src/genetic_algorithm_operators.cpp
             #src/genetic_algorithm_operators.h
@@ -46,7 +47,7 @@ target_link_libraries(instance_validator KCMC_Module)
 #ADD_EXECUTABLE(optimizer_genalg_binary src/optimizer_binary_genalg.cpp)
 #target_link_libraries(optimizer_genalg_binary KCMC_Module)
 
-## Optimizers (DINITZ) --------------------------------------------------------
+# Optimizers (DINITZ) --------------------------------------------------------
 
-#ADD_EXECUTABLE(optimizer src/optimizer_runtime.cpp)
-#target_link_libraries(optimizer KCMC_Module)
+ADD_EXECUTABLE(optimizer src/optimizer_runtime.cpp)
+target_link_libraries(optimizer KCMC_Module)
