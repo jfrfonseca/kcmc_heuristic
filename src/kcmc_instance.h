@@ -27,7 +27,7 @@
 #define UNVISITED_SENSOR -2
 #define INVALID_PREVIOUS_POI -1
 #define INVALID_REVERSE_EDGE -10
-#define MAX_GENERATION_ATTEMPTS 1000
+#define MAX_GENERATION_ATTEMPTS 5000
 #define USE_GREEDY_TO_GENERATE_INSTANCES false
 
 // GenAlg
@@ -36,6 +36,12 @@
 
 // Signal handler for exit events
 void exit_signal_handler(int signal);
+
+// Waits for the user to give an input before continuing
+void wait_user();
+
+// Converts a value to string and adds leading spaces up to a given length
+std::string stringfy(int length, int value);
 
 
 /* NODE

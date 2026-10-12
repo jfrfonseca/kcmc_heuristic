@@ -5,6 +5,7 @@ parallel -a /data/instance_classes.csv --colsep ' ' --files /app/instance_genera
 
 # Save the results, including the sacrifice line, sorted
 FILE=/data/instances.csv
+rm -rf "$FILE"
 cat /tmp/*.par | sort > "$FILE"
 
 # Remove the first line, that must be the sacrifice line

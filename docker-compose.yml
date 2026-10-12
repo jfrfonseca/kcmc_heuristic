@@ -3,9 +3,6 @@ version: "3.9"
 services:
 
   compiler:
-    # Dockerized compiler environment
-    profiles:
-      - compiler
     build:
       dockerfile: compiler.dockerfile
       context: .
@@ -16,9 +13,6 @@ services:
       - ./builds:/app/builds:rw
 
   instance_generator:
-    # Instances generator
-    profiles:
-      - instance_generator
     command: '/src/run_instance_generator.sh'
     build:
       dockerfile: instance_generator.dockerfile
@@ -28,9 +22,6 @@ services:
       - ./src:/src:ro
 
   instance_validator:
-    # Instances evaluator
-    profiles:
-      - instance_validator
     command: '/src/run_instance_validator.sh'
     build:
       dockerfile: instance_generator.dockerfile
@@ -40,10 +31,18 @@ services:
       - ./builds:/app:ro
       - ./src:/src:ro
 
+  debug_instance_validator:
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    build:
+      dockerfile: instance_generator.dockerfile
+      context: .
+    volumes:
+      - ./data:/data:rw
+      - ./builds:/app:ro
+      - ./src:/src:ro
+
   optimizer:
-    profiles:
-      - gurobi
-      - optimizer
     build:
       dockerfile: gurobi.dockerfile
       context: .
@@ -63,8 +62,6 @@ services:
       - ./builds:/app:ro
 
   fast_optimizer:
-    profiles:
-      - fast_optimizer
     build:
       dockerfile: gurobi.dockerfile
       context: .
@@ -78,8 +75,6 @@ services:
       - ./builds:/app:ro
 
   parser:
-    profiles:
-      - parser
     build:
       dockerfile: notebook.dockerfile
       context: .
@@ -93,8 +88,6 @@ services:
       - ./builds:/app:ro
 
   notebook:
-    profiles:
-      - notebook
     build:
       dockerfile: notebook.dockerfile
       context: .

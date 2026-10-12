@@ -11,3 +11,4 @@ COPY builds/instance_generator /app/instance_generator
 
 # Work directory configurations
 WORKDIR '/app'
+ENTRYPOINT ["/bin/bash"]

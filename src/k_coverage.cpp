@@ -5,6 +5,8 @@
 
 
 // STDLib dependencies
+#include <limits>     // getline
+#include <string>     // string
 #include <iostream>   // cout, endl, cerr
 #include <sstream>    // ostringstream
 #include <random>     // mt19937, uniform_real_distribution
@@ -20,9 +22,25 @@
  */
 
 
+// Waits for the user to give an input before continuing
+void wait_user() {
+  std::string s;
+  std::getline(std::cin, s);
+}
+
+
+// Handles output signals (like Ctrl+C) to exit gracefully
 void exit_signal_handler(int signal) {
    std::cerr << "Interrupt signal (" << signal << ") received. Exiting gracefully..." << std::endl;
    exit(0);
+}
+
+// Stringfy a value with leading spaces up to a given length
+std::string stringfy(int length, int value) {
+    std::string message = std::to_string(value);
+    std::string indent(length - message.length(), ' ');
+
+    return indent + message;
 }
 
 
