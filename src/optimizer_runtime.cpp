@@ -173,5 +173,13 @@ int main(int argc, char* const argv[]) {
     duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     printout_short(instance, kcmc_k, kcmc_m, "dinitz_dkov", duration, solution);
 
+    // DINITZ REUSE
+    solution.clear();
+    start = std::chrono::high_resolution_clock::now();
+    instance->dinitz_reuse(kcmc_k, kcmc_m, inactive_sensors, solution);
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    printout_short(instance, kcmc_k, kcmc_m, "dinitz_reuse", duration, solution);
+
     return 0;
 }

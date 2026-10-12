@@ -82,6 +82,16 @@ std::unordered_set<int> set_intersection(const std::unordered_set<int> &left, co
     }
     return intersection;
 }
+std::unordered_set<int> set_intersection(const std::unordered_set<int> &left, const std::unordered_map<int,int> &right) {
+    std::unordered_set<int> intersection;
+    for (const int &item : left) {
+        if (right.find(item) != right.end()) { // If item IN right side
+            intersection.insert(item);
+        }
+    }
+    return intersection;
+}
+std::unordered_set<int> set_intersection(const std::unordered_map<int,int> &left, const std::unordered_set<int> &right) {return set_intersection(right, left);}
 
 
 /* DISTANCE
