@@ -238,6 +238,7 @@ class KCMC_Instance {
 
         // METHODS FOR THE DINITZ HEURISTIC ---------------------------------------------------------------------------
         int dinitz_dkov(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution);
+        int dinitz_reuse(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution);
 
         // METHODS THAT MAY USE THE GREEDY OR THE DINITZ HEURISTICS ---------------------------------------------------
 
@@ -277,7 +278,7 @@ class KCMC_Instance {
 
         // DINITZ =================================================================================
         // Method to compute m-connectivity for a specific POI
-        int m_connectivity(const int m, const int poi, std::unordered_set<int> &inactive_sensors, std::unordered_map<int, int> &poi_used_sensors);
+        int m_connectivity(const int m, const int poi, std::unordered_set<int> &inactive_sensors, std::vector<std::vector<int>> &poi_paths);
 };
 
 #endif

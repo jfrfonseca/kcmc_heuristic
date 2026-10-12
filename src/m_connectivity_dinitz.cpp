@@ -155,7 +155,7 @@ int KCMC_Instance::m_connectivity(
     const int m,    // Constant - minimal number of disjoint paths to find
     const int poi,  // Loop pointer - the current POI
     std::unordered_set<int> &inactive_sensors,  // Loop invariant - the set of sensors that are currently inactive
-    std::unordered_map<int,int> &poi_used_sensors   // Output buffer - The sensors used in the paths for this POI, mapping to the number of its path
+    std::vector<std::vector<int>> &poi_paths    // Output buffer - a maximal set of disjoint paths for this POI
 ) {
 
     // Buffers
@@ -163,7 +163,7 @@ int KCMC_Instance::m_connectivity(
     int num_path, pushed_flow, a_sensor_in, a_sensor_out, next_sensor_in, a_sink, loop_counter=0,
         total_flow=0, idx_poi=(2*this->num_sensors), idx_sink=((2*this->num_sensors) + 1);
     std::unordered_map<int, std::vector<Edge>> network;
-    std::vector<int> level_graph, edge_checkpoint, path;
+    std::vector<int> level_graph, edge_checkpoint;
 
     // Set the size of the level graph buffer, counting each sensor twice (in and out versions)
     // Also put two positions, one for the POI and one for the SINK nodes.
@@ -321,11 +321,11 @@ int KCMC_Instance::m_connectivity(
 
     // If we got here, we have at least m flow and we want to know all the sensors that are a part of it
     // For each path found
-    poi_used_sensors.clear();
+    poi_paths.clear();
+    poi_paths.resize(total_flow);
     for (num_path = 0; num_path < total_flow; ++num_path) {
 
         // Reset the path buffer and the pointer of the start ofthe path
-        path.clear();
         a_sensor_in = idx_poi;
 
         // While we are not at the sink
@@ -350,8 +350,7 @@ int KCMC_Instance::m_connectivity(
             // If we got here, the next sensor is a part of the path
 
             // Add the next sensor to the registry of outputs
-            path.push_back(next_sensor_in);  // IN version of the next_sensor
-            poi_used_sensors[next_sensor_in] = num_path;  // Add the IN version, mapping to this path
+            poi_paths[num_path].push_back(next_sensor_in);  // Add the IN version, mapping to this path
 
             // Redirect the a_sensor to the OUT version of the next_sensor
             a_sensor_in = next_sensor_in + this->num_sensors;
@@ -364,21 +363,21 @@ int KCMC_Instance::m_connectivity(
 int KCMC_Instance::m_connectivity(int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &all_used_sensors) {
     // Prepare the buffers
     int poi, poi_connectivity;
-    std::unordered_map<int,int> poi_used_sensors;
+    std::vector<std::vector<int>> poi_paths;
     all_used_sensors.clear();
 
     // For each POI
     for (poi = 0; poi < this->num_pois; ++poi) {
 
         // Get the connectivity in the POI
-        poi_connectivity = m_connectivity(m, poi, inactive_sensors, poi_used_sensors);
+        poi_connectivity = m_connectivity(m, poi, inactive_sensors, poi_paths);
 
         // Check for the error encoded in a large number
         if (poi_connectivity > LARGE_NUMBER){return poi_connectivity;}  // Return the error signaled
         if (poi_connectivity != INVALID_PREVIOUS_POI){throw std::runtime_error("IMPOSSIBLE CONDITION WITH CONNECTIVITY " + std::to_string(m));}
 
         // If we got here, success for the POI! Lets add all the used sensors to the set
-        for (const auto &entry : poi_used_sensors) {all_used_sensors.insert(entry.first);}
+        for (const auto &path : poi_paths) {for (const auto &sensor : path) {all_used_sensors.insert(sensor);}}
     }
 
     // Here, we had success in each and every POI, and the all_used_sensors set contains all the sensors we used
