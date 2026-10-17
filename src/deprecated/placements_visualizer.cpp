@@ -4,6 +4,7 @@
 
 #include <random>    // mt19937, uniform_real_distribution
 #include <iostream>  // cin, cout, endl
+#include "kcmc_instance.h"
 
 
 void help(int argc, char* const argv[]) {
@@ -27,23 +28,27 @@ void help(int argc, char* const argv[]) {
 int main(int argc, char* const argv[]) {
     if (argc < 5) { help(argc, argv); }
 
-    /* Parse CMD SETTINGS */
     long long random_seed;
     int i, num_pois, num_sensors, num_sinks, area_side;
+    std::vector<Placement> pl_pois(num_pois), pl_sensors(num_sensors), pl_sinks(num_sinks);
+
+    // Parse the instance given
     num_pois    = atoi(argv[1]);
     num_sensors = atoi(argv[2]);
     num_sinks   = atoi(argv[3]);
     area_side   = atoi(argv[4]);
     random_seed = atoll(argv[5]);
 
-    // Print POIs and sensors
-    std::mt19937 gen(random_seed);
-    std::uniform_real_distribution<> point(0, area_side);
-    printf("id,x,y\n");
-    for (i=0; i<num_pois; i++) {printf("p%d,%d,%d\n", i, (int)(point(gen)), (int)(point(gen)));}
-    for (i=0; i<num_sensors; i++) {printf("i%d,%d,%d\n", i, (int)(point(gen)), (int)(point(gen)));}
+    // Coverage and sensing are not relevant
+    KCMC_Instance *instance = new KCMC_Instance(
+        num_pois, num_sensors, num_sinks,
+        area_side, 0, 0,
+        random_seed
+    );
 
-    // Set the SINKs buffers (if there is a single sink, it will be at the center of the area)
-    if (num_sinks == 1) {printf("s0,%d,%d\n", (int)(area_side / 2.0), (int)(area_side / 2.0));}
-    else {for (i=0; i<num_sinks; i++) {printf("s%d,%d,%d\n", i, (int)(point(gen)), (int)(point(gen)));}}
+    // Get the element placements using the same algorithm as the instance generator
+    instance->get_placements(pl_pois, pl_sensors, pl_sinks);
+    for (i=0; i<num_pois; i++) {printf("p%d,%d,%d\n", i, (int)(pl_pois[i].x), (int)(pl_pois[i].y));}
+    for (i=0; i<num_sensors; i++) {printf("i%d,%d,%d\n", i, (int)(pl_sensors[i].x), (int)(pl_sensors[i].y));}
+    for (i=0; i<num_sinks; i++) {printf("s%d,%d,%d\n", i, (int)(pl_sinks[i].x), (int)(pl_sinks[i].y));}
 }

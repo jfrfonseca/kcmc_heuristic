@@ -18,6 +18,9 @@ builds/*
 
 # CSV Data
 *.csv
+*.tsv
+*.sif
+*.cx2
 
 # Parquet Data
 *.pq
