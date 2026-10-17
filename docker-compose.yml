@@ -42,6 +42,16 @@ services:
       - ./builds:/app:ro
       - ./src:/src:ro
 
+  heuristics:
+    command: '/src/run_heuristics.sh'
+    build:
+      dockerfile: instance_generator.dockerfile
+      context: .
+    volumes:
+      - ./data:/data:rw
+      - ./builds:/app:ro
+      - ./src:/src:ro
+
   optimizer:
     build:
       dockerfile: gurobi.dockerfile

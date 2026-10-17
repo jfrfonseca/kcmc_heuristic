@@ -68,6 +68,14 @@ struct CompareLevelNode {
     }
 };
 
+struct SortLevelNode {
+    bool operator()(LevelNode const& a, LevelNode const& b) {
+        // return "true" if "a" is ordered before "b"
+        if (a.level == b.level){return (a.index <= b.index);}  // lowest index if equal level, for tie-breaking
+        else {return (a.level < b.level);}  // lowest level first
+    }
+};
+
 struct Placement {
     Node *node;
     int x, y;
@@ -177,6 +185,7 @@ class KCMC_Instance {
         /* Instance utilities
          * Get the KEY of the current instance
          * Serialize the current instance as a string
+         * Gets the rank of each POI, sensor, and sink in the instance, and also the total rank of the instance
          * Gets the degree of each sensor in the instance considering the given set of inactive sensors.
          * Shows the placements of POIs, sensors, and sinks in the instance.
          * Invert a set of sensors (get every sensor in the instance not in the set)
@@ -184,10 +193,18 @@ class KCMC_Instance {
          */
         std::string key() const;
         std::string serialize();
-        int get_degree(int buffer[], std::unordered_set<int> &inactive_sensors);
-        void get_placements(Placement *pl_pois, Placement *pl_sensors, Placement *pl_sinks);
-        int invert_set(std::unordered_set<int> &source_set, std::unordered_set<int> *target_set);
+        int rank(std::vector<int> &poi_rank, std::vector<int> &sensor_rank, std::vector<int> &sink_rank);
+        void get_placements(std::vector<Placement> &pl_pois, std::vector<Placement> &pl_sensors, std::vector<Placement> &pl_sinks);
+        int invert_set(std::unordered_set<int> &source_set, std::unordered_set<int> &target_set);
         int compute_level_graph(std::vector<int> &level_graph, std::unordered_set<int> &inactive_sensors);
+
+        /* Instance serializers
+         * Convert the instance to portable formats, like SIF or CitoScape
+         */
+        std::string to_sif(std::unordered_set<int> &inactive_sensors);
+        std::string to_sif();
+        std::string to_cx2(std::unordered_set<int> &inactive_sensors);
+        std::string to_cx2();
 
         /* Instance payload services - K-COVERAGE
          * Work both in GREEDY and DINITZ versions of the heuristics
@@ -241,6 +258,7 @@ class KCMC_Instance {
         // METHODS FOR THE DINITZ HEURISTIC ---------------------------------------------------------------------------
         int dinitz_dkov(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution);
         int dinitz_reuse(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution);
+        int dinitz_breadth(int k, int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution);
 
         // METHODS THAT MAY USE THE GREEDY OR THE DINITZ HEURISTICS ---------------------------------------------------
 
@@ -261,13 +279,13 @@ class KCMC_Instance {
     private:
         // GENERAL ================================================================================
         // Private version of the get_placements method
-        void get_placements(Placement *pl_pois, Placement *pl_sensors, Placement *pl_sinks, bool push);
+        void get_placements(std::vector<Placement> &pl_pois, std::vector<Placement> &pl_sensors, std::vector<Placement> &pl_sinks, bool push);
         // Instance de-serialization from the short instance definition
         void regenerate();
         // Method to parse the edges of a serialized instance
         int parse_edge(int stage, const std::string& token);
         // Method to add non-visited sensors to achieve k-coverage
-        int add_kcov(const int k, std::unordered_set<int> &visited_sensors);
+        int add_kcov(const int k, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution);
 
         // GREEDY =================================================================================
         // Method that uses A* to find a path for the greedy heuristic

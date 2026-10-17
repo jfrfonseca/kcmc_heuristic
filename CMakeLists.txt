@@ -8,13 +8,10 @@ ADD_LIBRARY(KCMC_Module
             src/kcmc_instance.cpp
             src/k_coverage.cpp
             src/m_connectivity_greedy.cpp
+            src/heuristic_greedy.cpp
             src/m_connectivity_dinitz.cpp
-            src/optimizer_greedy.cpp
-            src/m_connectivity_dinitz.cpp
-            src/optimizer_dinitz.cpp
+            src/heuristic_dinitz.cpp
             src/kcmc_instance.h
-            #src/genetic_algorithm_operators.cpp
-            #src/genetic_algorithm_operators.h
 )
 target_link_libraries(KCMC_Module)
 
@@ -28,26 +25,14 @@ target_link_libraries(instance_generator KCMC_Module)
 ADD_EXECUTABLE(instance_validator src/instance_validator.cpp)
 target_link_libraries(instance_validator KCMC_Module)
 
+ADD_EXECUTABLE(isomorphism_validator src/isomorphism_validator.cpp)
+target_link_libraries(isomorphism_validator KCMC_Module)
 
 #ADD_EXECUTABLE(photogenic_instance_generator src/photogenic_instance_generator.cpp)
 #target_link_libraries(photogenic_instance_generator KCMC_Module)
 
 
-# Random Placements Visualizer ------------------------------------------------
-#ADD_EXECUTABLE(placements_visualizer src/placements_visualizer.cpp)
-#target_link_libraries(placements_visualizer KCMC_Module)
-
-
-## Optimizers (GEN ALG) -------------------------------------------------------
-# ADD_EXECUTABLE(optimizer_gupta_exact deprecated/optimizer_gupta_exact.cpp)
-# target_link_libraries(optimizer_gupta_exact KCMC_Module)
-# ADD_EXECUTABLE(optimizer_gupta_adapted deprecated/optimizer_gupta_adapted.cpp)
-# target_link_libraries(optimizer_gupta_adapted KCMC_Module)
-
-#ADD_EXECUTABLE(optimizer_genalg_binary src/optimizer_binary_genalg.cpp)
-#target_link_libraries(optimizer_genalg_binary KCMC_Module)
-
 # Optimizers (DINITZ) --------------------------------------------------------
 
-ADD_EXECUTABLE(optimizer src/optimizer_runtime.cpp)
-target_link_libraries(optimizer KCMC_Module)
+ADD_EXECUTABLE(heuristics src/heuristics_runtime.cpp)
+target_link_libraries(heuristics KCMC_Module)

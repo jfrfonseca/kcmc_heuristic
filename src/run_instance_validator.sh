@@ -1,6 +1,12 @@
 #!/bin/sh
 
+rm -rf /data/isomorphism_validation.csv
 rm -rf /data/instances_validated.csv
+rm -rf /data/cx2
+mkdir -p /data/cx2
+
+# Run the isomorphism validator
+/app/isomorphism_validator /data/instances.csv > /data/isomorphism_validation.csv
 
 # Read the instances from the CSV file (format them as space-separated parameters)
 # Pipe the formatted instances to the instance validator

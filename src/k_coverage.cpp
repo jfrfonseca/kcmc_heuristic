@@ -139,6 +139,40 @@ void setify(std::unordered_set<int> &target, std::unordered_map<int, int> refere
 }
 
 
+int KCMC_Instance::rank(std::vector<int> &poi_rank, std::vector<int> &sensor_rank, std::vector<int> &sink_rank) {
+
+    // Prepare the buffers
+    int total = 0;
+    poi_rank.clear();
+    poi_rank.resize(this->num_pois);
+    sensor_rank.clear();
+    sensor_rank.resize(this->num_sensors);
+    sink_rank.clear();
+    sink_rank.resize(this->num_sinks);
+
+    // Get the rank of each POI based on the number of sensors covering it
+    for (int n_poi=0; n_poi < this->num_pois; n_poi++) {
+        poi_rank[n_poi] = ((int)this->poi_sensor[n_poi].size());
+        total += poi_rank[n_poi];
+    }
+
+    // Get the rank of each sensor based on the number of neighbors it can communicate to
+    for (int n_sensor=0; n_sensor < this->num_sensors; n_sensor++) {
+        sensor_rank[n_sensor] = ((int)this->sensor_sensor[n_sensor].size());
+        total += sensor_rank[n_sensor];
+    }
+
+    // Get the rank of each sink based on the number of sensors it can communicate to
+    for (int n_sink=0; n_sink < this->num_sinks; n_sink++) {
+        sink_rank[n_sink] = ((int)this->sink_sensor[n_sink].size());
+        total += sink_rank[n_sink];
+    }
+
+    // Return the total rank
+    return total;
+}
+
+
 /* #####################################################################################################################
  * KCMC-PROBLEM K-COVERAGE METHODS
  */
@@ -245,52 +279,70 @@ int KCMC_Instance::compute_level_graph(std::vector<int> &level_graph, std::unord
 }
 
 
-int KCMC_Instance::add_kcov(const int k, std::unordered_set<int> &visited_sensors) {
-    int p, missing_coverage, i, coverage_contribution, qt_added=0;
-    std::unordered_set<int> pois_missing_coverage, poi_covering_sensors;
-    std::priority_queue<std::pair<int, int>> queue;
+int KCMC_Instance::add_kcov(const int k, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution) {
 
-    // Do a first loop
-    do {
-        // For each POI, check if it has enough coverage
-        for (p = 0; p < this->num_pois; p++) {
-            poi_covering_sensors = this->poi_sensor[p];
+    // buffers
+    int poi, qt_added=0, most_voted_index, most_voted_votes;
+    std::vector<int> current_coverage, pois_missing_coverage;
+    std::unordered_map<int, int> sensor_votes;  // Map from sensor to its quantity of votes
 
-            // Get how much coverage the POI is still missing, using olny the set of used sensors
-            missing_coverage = k - ((int)(set_intersection(poi_covering_sensors, visited_sensors).size()));
+    // Start a buffer counting, for each poi, how many of the sensors already in the solution cover it
+    // Start a queue of POIs that still need coverage
+    // Return early if no POIs are still in need of coverage
+    current_coverage.clear();
+    current_coverage.resize(this->num_pois);
+    pois_missing_coverage.clear();
+    for (poi = 0; poi < this->num_pois; ++poi) {
+        current_coverage[poi] = (int)(set_intersection(this->poi_sensor[poi], solution).size());
+        // Add to the queue if the POI doesnt have enough coverage
+        if (current_coverage[poi] < k) {pois_missing_coverage.push_back(poi);}
+    }
+    if (pois_missing_coverage.empty()) {return 0;}
 
-            // If we have missing coverage, add the POI to the list of POIs missing coverage
-            if (missing_coverage > 0) {
-                pois_missing_coverage.insert(p);
-            }
-        }
-        if (pois_missing_coverage.empty()) {break;}  // stop here if no POI needs coverage
+    // While there are still POIs in the queue that need coverage
+    while (!pois_missing_coverage.empty()) {
 
-        // For each sensor NOT in the set of used sensors
-        while (!queue.empty()) {queue.pop();}  // Clear the priority queue before filling it again
-        for (i = 0; i < this->num_sensors; i++) {
-            if (!isin(visited_sensors, i)) {
+        // Reset the sensor votes for this iteration
+        sensor_votes.clear();
+        most_voted_votes=0;
+        most_voted_index=-1;
 
-                // Check how many POIs this sensor covers that are missing coverage,
-                // and add this sensor to a priority queue ordered by the size of its coverage contribution
-                coverage_contribution = (int)(set_intersection(pois_missing_coverage, this->sensor_poi[i]).size());
-                if (coverage_contribution > 0) {
-                    queue.push(std::make_pair(coverage_contribution, i));
+        // For each POI in the queue
+        for (const int &poi : pois_missing_coverage) {
+
+            // For each sensor that covers this POI, is not inactive nor is already in the solution
+            for (const int &sensor : this->poi_sensor[poi]) {
+                if (!isin(inactive_sensors, sensor) && !isin(solution, sensor)) {
+
+                    // Add a vote to the sensor
+                    if (sensor_votes.find(sensor) == sensor_votes.end()) {sensor_votes[sensor] = 0;}
+                    sensor_votes[sensor] += 1;
+
+                    // Update the champion
+                    if (sensor_votes[sensor] > most_voted_votes) {
+                        most_voted_votes = sensor_votes[sensor];
+                        most_voted_index = sensor;
+                    }
                 }
             }
         }
-        if (queue.empty()) {throw std::runtime_error("No available sensors to cover the remaining POIs.");}
+        if (most_voted_index == -1) {throw std::runtime_error("No valid sensor found to cover remaining POIs.");}
 
-        // Add the sensor with the highest coverage contribution to the set of used sensors
-        if (!queue.empty()) {
-            visited_sensors.insert(queue.top().second);
-            qt_added++;
+        // Add the most voted sensor to the solution
+        solution.insert(most_voted_index);
+        qt_added += 1;
+
+        // Update the coverage - the whole coverage, since the sensor might cover many pois
+        current_coverage.clear();
+        current_coverage.resize(this->num_pois);
+        pois_missing_coverage.clear();
+        for (poi = 0; poi < this->num_pois; ++poi) {
+            current_coverage[poi] = (int)(set_intersection(this->poi_sensor[poi], solution).size());
+            // Add to the queue if the POI doesnt have enough coverage
+            if (current_coverage[poi] < k) {pois_missing_coverage.push_back(poi);}
         }
-
-        // And from here we will keep looping
+        if (pois_missing_coverage.empty()) {return 0;}
     }
-    while (!pois_missing_coverage.empty());
 
-    // If we got here, every POI has enough coverage.
     return qt_added;  // Return the number of sensors added
 }

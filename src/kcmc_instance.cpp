@@ -22,7 +22,7 @@
  * Generates the instance's components placements, assuming the instance already have all main attributes.
  * THE PLACEMENTS WILL BE USED TO COMPUTE THE EDGES
  */
-void KCMC_Instance::get_placements(Placement *pl_pois, Placement *pl_sensors, Placement *pl_sinks, bool push) {
+void KCMC_Instance::get_placements(std::vector<Placement> &pl_pois, std::vector<Placement> &pl_sensors, std::vector<Placement> &pl_sinks, bool push) {
 
     // Iteration buffers
     int i;
@@ -58,7 +58,7 @@ void KCMC_Instance::get_placements(Placement *pl_pois, Placement *pl_sensors, Pl
         }
     }
 }
-void KCMC_Instance::get_placements(Placement *pl_pois, Placement *pl_sensors, Placement *pl_sinks) {
+void KCMC_Instance::get_placements(std::vector<Placement> &pl_pois, std::vector<Placement> &pl_sensors, std::vector<Placement> &pl_sinks) {
     this->get_placements(pl_pois, pl_sensors, pl_sinks, false);
 }
 
@@ -78,7 +78,7 @@ void KCMC_Instance::regenerate() {
     std::vector<Placement> pl_pois(this->num_pois), pl_sensors(this->num_sensors), pl_sinks(this->num_sinks);
 
     // Get the placemens of the instance objects
-    this->get_placements(pl_pois.data(), pl_sensors.data(), pl_sinks.data(), true);  // Use the private version, that pushes components
+    this->get_placements(pl_pois, pl_sensors, pl_sinks, true);  // Use the private version, that pushes components
 
     // Iterate each sensor and find its connections
     for (i=0; i<this->num_sensors; i++) {
@@ -252,23 +252,6 @@ int KCMC_Instance::parse_edge(const int stage, const std::string& token){
  */
 
 
-/** Degree Getter
- * Gets the degree of each active sensor, and the number of sensors with degre larger than 0
- */
-int KCMC_Instance::get_degree(int buffer[], std::unordered_set<int> &inactive_sensors) {
-
-    // For each Sensor, count its coverage, returning the number of sensors with any conection at all
-    int has_connection = 0;
-    for (int n_sensor=0; n_sensor < this->num_sensors; n_sensor++) {
-        buffer[n_sensor] = (int)(set_diff(sensor_sensor[n_sensor], inactive_sensors).size());
-        has_connection += 1;
-    }
-
-    // Return the number of Sensors that have any degree at all
-    return has_connection;
-}
-
-
 /** Instance identification utility
  */
 std::string KCMC_Instance::key() const {
@@ -326,14 +309,131 @@ std::string KCMC_Instance::serialize() {
 }
 
 
-int KCMC_Instance::invert_set(std::unordered_set<int> &source_set, std::unordered_set<int> *target_set) {
-    target_set->clear();
+int KCMC_Instance::invert_set(std::unordered_set<int> &source_set, std::unordered_set<int> &target_set) {
+    target_set.clear();
     for (int i=0; i<this->num_sensors; i++) {
         if (!isin(source_set, i)) {
-            target_set->insert(i);
+            target_set.insert(i);
         }
     }
-    return target_set->size();
+    return target_set.size();
+}
+
+
+std::string KCMC_Instance::to_sif(std::unordered_set<int> &inactive_sensors) {
+    std::string output = "";
+
+    // For each edge Poi-Sensor
+    for (const auto &pair : this->poi_sensor) {
+        int poi = pair.first;
+        for (const auto &sensor : pair.second) {
+            if (isin(inactive_sensors, sensor)){continue;}
+            output += "p" + std::to_string(poi) + " covg s" + std::to_string(sensor) + "\n";
+        }
+    }
+
+    // For each edge Sensor-Sensor
+    for (const auto &pair : this->sensor_sensor) {
+        int sensor1 = pair.first;
+        if (isin(inactive_sensors, sensor1)){continue;}
+        for (const auto &sensor2 : pair.second) {
+            if (isin(inactive_sensors, sensor2)){continue;}
+            output += "s" + std::to_string(sensor1) + " conn s" + std::to_string(sensor2) + "\n";
+        }
+    }
+
+    // For each edge Sensor-Sink
+    for (const auto &pair : this->sensor_sink) {
+        int sensor = pair.first;
+        if (isin(inactive_sensors, sensor)){continue;}
+        for (const auto &sink : pair.second) {
+            output += "s" + std::to_string(sensor) + " conn k" + std::to_string(sink) + "\n";
+        }
+    }
+
+    return output;
+}
+std::string KCMC_Instance::to_sif() {
+    std::unordered_set<int> inactive_sensors;
+    inactive_sensors.clear();
+    return this->to_sif(inactive_sensors);
+}
+
+
+std::string KCMC_Instance::to_cx2(std::unordered_set<int> &inactive_sensors) {
+
+    // Buffers
+    std::string status, output = "";
+    int id_counter = 0, qt_edges = 0;
+    std::vector<Placement> poi_placements(this->num_pois), sensor_placements(this->num_sensors), sink_placements(this->num_sinks);
+
+    // Get the placements
+    this->get_placements(poi_placements, sensor_placements, sink_placements);
+
+    // Start the CX2 output with the version and fragment information
+    for (const auto &pair : this->poi_sensor) {qt_edges += pair.second.size();}
+    for (const auto &pair : this->sensor_sensor) {qt_edges += pair.second.size();}
+    for (const auto &pair : this->sensor_sink) {qt_edges += pair.second.size();}
+    output += "[\n  { \"CXVersion\": \"2.0\", \"hasFragments\": false },\n  { \"metaData\": [\n    { \"elementCount\": " + std::to_string(this->num_pois + this->num_sensors + this->num_sinks) + ", \"name\": \"nodes\"},\n    { \"elementCount\": " + std::to_string(qt_edges) + ", \"name\": \"edges\"}\n  ] },\n";
+
+    // Add the Attribute Declarations (only for nodes)
+    output += "  {\n    \"attributeDeclarations\": [\n      {\n        \"nodes\": {\n          \"node_type\": { \"d\": \"string\" },\n          \"status\": { \"d\": \"string\" }\n        }\n      }\n    ]\n  },\n";
+
+    // Declare all POIs, sensors, and sinks
+    output += "  {\n    \"nodes\": [\n";
+    for (int poi = 0; poi < this->num_pois; poi++) {
+        output += "      { \"id\": " + std::to_string(id_counter+poi) + ", \"v\": { \"name\": \"p" + std::to_string(poi) + "\", \"node_type\": \"POI\", \"status\": \"active\" }, \"x\": " + std::to_string(poi_placements[poi].x) + ", \"y\": " + std::to_string(poi_placements[poi].y) + " },\n";
+    }
+    id_counter += this->num_pois;
+    for (int sensor = 0; sensor < this->num_sensors; sensor++) {
+        if (isin(inactive_sensors, sensor)){status = "inactive";} else {status = "active";}
+        output += "      { \"id\": " + std::to_string(id_counter+sensor) + ", \"v\": { \"name\": \"s" + std::to_string(sensor) + "\", \"node_type\": \"SENSOR\", \"status\": \"" + status + "\" }, \"x\": " + std::to_string(sensor_placements[sensor].x) + ", \"y\": " + std::to_string(sensor_placements[sensor].y) + " },\n";
+    }
+    id_counter += this->num_sensors;
+    for (int sink = 0; sink < this->num_sinks; sink++) {
+        output += "      { \"id\": " + std::to_string(id_counter+sink) + ", \"v\": { \"name\": \"k" + std::to_string(sink) + "\", \"node_type\": \"SINK\", \"status\": \"active\" }, \"x\": " + std::to_string(sink_placements[sink].x) + ", \"y\": " + std::to_string(sink_placements[sink].y) + " },\n";
+    }
+    id_counter += this->num_sinks;
+    output = output.substr(0, output.size() - 2) + "\n    ]\n  },\n  {\n    \"edges\": [\n";  // Remove the trailing coma, close the nodes list and start the edges list
+
+    // For each edge Poi-Sensor
+    for (const auto &pair : this->poi_sensor) {
+        int poi = pair.first;
+        for (const auto &sensor : pair.second) {
+            output += "      { \"id\": " + std::to_string(id_counter) + ", \"s\": " + std::to_string(poi) + ", \"t\": " + std::to_string(sensor+this->num_pois) + " },\n";
+            id_counter += 1;
+        }
+    }
+
+    // For each edge Sensor-Sensor
+    for (const auto &pair : this->sensor_sensor) {
+        int sensor1 = pair.first;
+        if (isin(inactive_sensors, sensor1)){continue;}
+        for (const auto &sensor2 : pair.second) {
+            if (isin(inactive_sensors, sensor2)){continue;}
+            output += "      { \"id\": " + std::to_string(id_counter) + ", \"s\": " + std::to_string(sensor1+this->num_pois) + ", \"t\": " + std::to_string(sensor2+this->num_pois) + " },\n";
+            id_counter += 1;
+        }
+    }
+
+    // For each edge Sensor-Sink
+    for (const auto &pair : this->sensor_sink) {
+        int sensor = pair.first;
+        if (isin(inactive_sensors, sensor)){continue;}
+        for (const auto &sink : pair.second) {
+            output += "      { \"id\": " + std::to_string(id_counter) + ", \"s\": " + std::to_string(sensor+this->num_pois) + ", \"t\": " + std::to_string(sink+this->num_pois+this->num_sensors) + " },\n";
+            id_counter += 1;
+        }
+    }
+    output = output.substr(0, output.size() - 2) + "\n    ]\n  },\n  {\n    \"status\": [\n      { \"error\": \"\", \"success\": true }\n    ]\n  }";  // Remove the trailing coma, close the edges list and add the ending
+
+
+    return output+"\n]";
+}
+std::string KCMC_Instance::to_cx2() {
+    std::unordered_set<int> inactive_sensors;
+    inactive_sensors.clear();
+    return this->to_cx2(inactive_sensors);
 }
 
 

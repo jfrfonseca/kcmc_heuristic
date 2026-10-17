@@ -45,20 +45,27 @@ You must also verify the printed results to check that all generated instances a
 That can be seen by the first value printed after the string "LINES COUNT", that must always be 1
 
 
-## Instance Evaluator
+## Instance Validator
 
-Run the instance evaluator with the following commands:
+Run the instance validator with the following commands:
 
 ```bash
-docker compose run instance_evaluator
+docker compose run instance_validator
 docker compose down
 ```
 
 The docker-compose down command cleans up the containers to avoid errors in further executions due to persistent files.
 
-The instances evaluator reads the instances from the file `instances.csv`, evaluates them according to the KCMC problem constraints, and outputs the results to the standard output.
+The instances validator reads the instances from the file `instances.csv`, validates them according to the KCMC problem constraints, and outputs the results to the standard output.
 
 It uses both the greedy and the dinitz validation methods to check the feasibility of the instances. It also runs the same instance for all range of values between 1 and k and all range between 1 and m, and every combination of those two. Including the nonsensical m>k combinations, that are still valid for solving the problem although have no practical use.
+
+The whole point is to make sure that the generated instances are valid - the KCMC problem can be solved on those.
+
+The validator also runs the isomorphism validator, to make sure we have no pairs of instances that are isomorphic.
+This is important to guarantee we are testing on many diferent instances.
+The no-possible-isomorphism validation is easy - we count how many vertices of each degree a instance have (separating pois, sensors and sinks). The degree of a vertice is the number of edges connected to it. The quantity of vertices of each degree in an instance is its profile. If there are no two instances that have the same profile, it means that there is no possibility of having any pair of isomorphic instances.
+It is important to say that two instances having the same profile does not necessarily mean they are isomorphic, but if the profiles are different, it necessarily means the instances are not isomorphic.
 
 
 ## APPENDIX
