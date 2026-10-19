@@ -192,7 +192,7 @@ int KCMC_Instance::k_coverage(const int k, std::unordered_set<int> &inactive_sen
     for (int n_poi=0; n_poi < this->num_pois; n_poi++) {
         active_coverage = set_diff(this->poi_sensor[n_poi], inactive_sensors).size();
         if (active_coverage < k) {
-            return (n_poi*1000000)+(int)(active_coverage);
+            return (n_poi*LARGE_NUMBER)+(int)(active_coverage);
         }
     }
 
@@ -220,7 +220,7 @@ int KCMC_Instance::k_coverage(const int k, std::unordered_set<int> &inactive_sen
         active_coverage = poi_solution.size();
         solution = set_merge(solution, poi_solution);
         if (active_coverage < k) {
-            return (n_poi*1000000)+(int)(active_coverage);
+            return (n_poi*LARGE_NUMBER)+(int)(active_coverage);
         }
     }
 

@@ -188,14 +188,12 @@ class KCMC_Instance {
          * Gets the rank of each POI, sensor, and sink in the instance, and also the total rank of the instance
          * Gets the degree of each sensor in the instance considering the given set of inactive sensors.
          * Shows the placements of POIs, sensors, and sinks in the instance.
-         * Invert a set of sensors (get every sensor in the instance not in the set)
          * Compute the level graph of the instance considering the given set of inactive sensors (get the lowest distance in hops from each active sensor to the nearest sink using only active sensors)
          */
         std::string key() const;
         std::string serialize();
         int rank(std::vector<int> &poi_rank, std::vector<int> &sensor_rank, std::vector<int> &sink_rank);
         void get_placements(std::vector<Placement> &pl_pois, std::vector<Placement> &pl_sensors, std::vector<Placement> &pl_sinks);
-        int invert_set(std::unordered_set<int> &source_set, std::unordered_set<int> &target_set);
         int compute_level_graph(std::vector<int> &level_graph, std::unordered_set<int> &inactive_sensors);
 
         /* Instance serializers

@@ -6,7 +6,7 @@ services:
     build:
       dockerfile: compiler.dockerfile
       context: .
-    command: bash /app/src/compiler_entrypoint.sh
+    command: bash /app/src/run_compiler.sh
     volumes:
       - ./CMakeLists.txt:/app/CMakeLists.txt:ro
       - ./src:/app/src:ro
@@ -53,17 +53,16 @@ services:
       - ./src:/src:ro
 
   optimizer:
+    command: '/src/run_optimizer.sh'
     build:
       dockerfile: gurobi.dockerfile
       context: .
-    command: "python -u /home/gurobi/src/gurobi_optimizer.py --instances_file /data/instances.csv --limit 3600 --results s3://kcmc-heuristic/2026-10 --lock KCMC"
     environment:
       GRB_CLIENT_LOG: 3
       PYTHONPATH: "/home/gurobi/src"
       AWS_DEFAULT_REGION: us-east-1
       AWS_ACCESS_KEY_ID: ${AWS_SECRET_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      SHARDING: ${SHARDING}
     volumes:
       - ${GUROBI_LICENSE_FILE}:/opt/gurobi/gurobi.lic:ro
       - ./data/results:/results:rw

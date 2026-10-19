@@ -66,25 +66,33 @@ int KCMC_Instance::dinitz_dkov(const int k, const int m, std::unordered_set<int>
 /** DINITZ REUSE
  * For each POI:
  *     - Use the dinitz algorithm to get the sensor-disjoint paths that yield max-flow between the POI and the SINK.
- *     - Store the paths for later reuse.
- * Start an array of required connectivity for each POI, each with the value m.
- * While there are still positive values in this array (thus, while there are POIs that still do not meet the m-connectivity requirement):
- *     - For each path that was not included in the result
- *         - Count how many POIs (that still don't meet the m-connectivity requirement) that are covered by the path
- *         - Select the path that covers the most POIs (that still don't meet the m-connectivity requirement) and add it to the solution
- *             - If there are two candidates that cover the same highest number of POIs, select the shortest path
- *                 - If there is still a tie, choose arbitrarily
+ *     - For every path found between the POI and the SINK:
+ *         - Store the path for later usage
+ *             - For every sensor in the path
+ *                 - For every POI covered by that sensor
+ *                     - Add the path to the set of paths that cover this POI
+ *                     - Add the POI to the set of POIs covered by this path
+ * Start an array of the current connectivity of each POI, initially set to 0.
+ * While there is still a POI in the connectivity array with a value less than m:
+ *     - For each POI with less than m connectivity:
+ *         - For each path that is not in the current solution and has a sensor that covers the POI:
+ *             - Add one vote to the path
+ *     - Select the path with the most votes and add it to the solution
+ *         - In case of a tie, get the shortest path
+ *             - In case of another tie, choose arbitrarily
+ *     - Update the current connectivity of each POI that is covered by the chosen path
  * Use AdKCov to add sensors to the solution until every POI has enough coverage.
  * The sensors in the paths chosen, plus the added sensors for k-coverage, are the heuristically-chosen minimal set.
  */
 int KCMC_Instance::dinitz_reuse(const int k, const int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution) {
 
     // Local buffers
-    int poi, sentinel, num_path, path_covered_pois, best_path_num, best_path_coverage, best_path_length, pre_k_cov_sensors;
-    std::vector<int> path;
-    std::unordered_set<int> ignore_path, used_paths;
+    bool connectivity_is_sufficient;
+    int poi, sentinel, pre_k_cov_sensors, num_path, a_sensor, a_poi, best_path_idx, best_path_votes, best_path_length;
+    std::vector<int> current_connectivity, votes;
     std::vector<std::vector<int>> poi_paths, all_paths;
-    std::unordered_map<int, int> required_connectivity, added_connectivity;
+    std::unordered_map<int, std::unordered_set<int>> poi_is_covered_by_paths, path_cover_pois;
+    std::unordered_set<int> used_paths;
 
     // For each POI
     all_paths.clear();
@@ -100,89 +108,80 @@ int KCMC_Instance::dinitz_reuse(const int k, const int m, std::unordered_set<int
         if (sentinel != -1) {throw std::runtime_error("Failed to find " + std::to_string(m) + " paths! And we obtained no more information!");}
         if (poi_paths.size() < m) {throw std::runtime_error("Failed to find " + std::to_string(m) + " paths! And we obtained no more information!");}
 
-        // Add each path to the collection of all paths
-        for (const auto &path : poi_paths) {
-            all_paths.push_back(path);
-        }
-    }
+        // Add each path to the list of all paths
+        for (num_path = 0; num_path < poi_paths.size(); ++num_path) {
+            all_paths.push_back(poi_paths[num_path]);
 
-    // Start the buffer of POIs that need connectivity (initially all POIs require full connectivity)
-    for (poi = 0; poi < this->num_pois; ++poi) {required_connectivity[poi] = m;}
+            // For every sensor in the path, note which POIs it covers
+            sentinel = all_paths.size() - 1;
+            for (a_sensor = 0; a_sensor < poi_paths[num_path].size(); ++a_sensor) {
+                for (const int a_poi : this->sensor_poi[poi_paths[num_path][a_sensor]]) {
 
-    // While there are still POIs that do not meet the m-connectivity requirement
-    while (!required_connectivity.empty()) {
-        added_connectivity.clear();
+                    // Add the a_poi to the list of POIs covered by this path
+                    path_cover_pois[sentinel].insert(a_poi);
 
-        // For every path returned
-        for (num_path = 0; num_path < ((int)all_paths.size()); ++num_path) {
-            if (isin(ignore_path, num_path)) {continue;}
-            if (isin(used_paths, num_path)) {continue;}
-            path = all_paths[num_path];
-
-            // For every sensor in the path, add the number of POIs it covers (only POIs that still require connectivity)
-            path_covered_pois = 0;
-            for (const auto &sensor : path) {
-                if (isin(inactive_sensors, sensor)) {throw std::runtime_error("Inactive sensor found in path!");}
-                path_covered_pois += ((int)set_intersection(this->sensor_poi[sensor], required_connectivity).size());
-            }
-
-            // If the path does not adds any connectivity, add it to the list of ignored paths.
-            // If it does add connectivity, add it to the list of candidate paths.
-            if (path_covered_pois == 0) {ignore_path.insert(num_path);}
-            else {added_connectivity[num_path] = path_covered_pois;}
-        }
-
-        // Get the best path based on the number of POIs it covers, and its length (prefer shorter paths in case of ties)
-        best_path_num = -1;
-        best_path_coverage = -1;
-        best_path_length = LARGE_NUMBER;
-        for (const auto &entry : added_connectivity) {
-            num_path = entry.first;
-            path_covered_pois = entry.second;
-            path = all_paths[num_path];
-
-            // If the current path has better coverage, or, having the same coverage, is shorter, pick it
-            // The first path found will always be picked
-            if (
-                (path_covered_pois > best_path_coverage)
-             || (
-                    (path_covered_pois == best_path_coverage)
-                 && (((int)path.size()) < best_path_length)
-                )
-            ) {
-                best_path_num = num_path;
-                best_path_coverage = path_covered_pois;
-                best_path_length = ((int)path.size());
-            }
-        }
-        if (best_path_num == -1) {throw std::runtime_error("No valid path found!");}
-
-        // Mark the best path as already included in the result
-        ignore_path.insert(best_path_num);
-        used_paths.insert(best_path_num);
-
-        // Update the required connectivity based on the best path
-        path = all_paths[best_path_num];
-        for (const auto &sensor : path) {
-            for (const auto &poi : this->sensor_poi[sensor]) {
-
-                // If the POI requires connectivity, update it
-                if (isin(required_connectivity, poi)) {
-                    required_connectivity[poi] -= 1;
+                    // Add the path to the list of paths that cover this a_poi
+                    poi_is_covered_by_paths[a_poi].insert(sentinel);
                 }
-
-                // Remove POIs that no longer require connectivity
-                if (required_connectivity[poi] <= 0) {required_connectivity.erase(poi);}
             }
+
+            // Sanity checks. This path must cover the poi that found it and vice versa
+            if (!isin(path_cover_pois[sentinel], poi)) {throw std::runtime_error("Path " + std::to_string(sentinel) + " does not cover POI " + std::to_string(poi));}
+            if (!isin(poi_is_covered_by_paths[poi], sentinel)) {throw std::runtime_error("POI " + std::to_string(poi) + " is not covered by path " + std::to_string(sentinel));}
         }
     }
-    // Here, every POI has the required connectivity!
-    // Add all the sensors of every used path to the solution
+
+    // Prepare the buffers
     solution.clear();
-    for (const auto &path_num : used_paths) {
-        for (const auto &sensor : all_paths[path_num]) {
-            solution.insert(sensor);
+    used_paths.clear();
+    current_connectivity.resize(this->num_pois, 0);
+    connectivity_is_sufficient = false;
+
+    // While we still don't have enough connectivity for all POIs
+    while (!connectivity_is_sufficient) {
+
+        // Reset the voting tally and pointers
+        votes.resize(all_paths.size(), 0);
+        best_path_idx = -1;
+        best_path_votes = 1;
+        best_path_length = LARGE_NUMBER;
+        connectivity_is_sufficient = true;  // Will be set to false if this is not true
+
+        // For each POI that doesn't have enough connectivity
+        for (poi = 0; poi < this->num_pois; ++poi) {
+            if (current_connectivity[poi] < m) {
+                connectivity_is_sufficient = false;  // A single POI with insufficient connectivity makes this variable false
+
+                // For each path that covers this POI and is not yet used in the solution
+                for (const int num_path : poi_is_covered_by_paths[poi]) {
+                    if (!isin(used_paths, num_path)) {
+
+                        // Add one vote for this path
+                        votes[num_path]++;
+                    }
+                }
+            }
         }
+
+        // Get the best path
+        for (num_path = 0; num_path < (int)all_paths.size(); ++num_path) {
+            if (isin(used_paths, num_path)) {continue;}  // Skip paths that are already used
+
+            // If either the current path had more votes than the current best, or it had the same number of votes but is shorter, choose it as the best path
+            if (votes[num_path] > best_path_votes || ((votes[num_path] == best_path_votes) && ((int)all_paths[num_path].size()) < best_path_length)) {
+                best_path_idx = num_path;
+                best_path_votes = votes[num_path];
+                best_path_length = (int)all_paths[num_path].size();
+            }
+        }
+        if (best_path_idx == -1) {throw std::runtime_error("No valid path found");}
+
+        // Add the best path to the solution
+        used_paths.insert(best_path_idx);
+        for (const int a_sensor : all_paths[best_path_idx]) {solution.insert(a_sensor);}
+
+        // Increase the connectivity of all POIs covered by the best path
+        for (const int a_poi : path_cover_pois[best_path_idx]) {current_connectivity[a_poi]++;}
     }
 
     // Run the ADD-KCOV procedure to ensure k-coverage
@@ -195,27 +194,38 @@ int KCMC_Instance::dinitz_reuse(const int k, const int m, std::unordered_set<int
 /** DINITZ BREADTH
  * For each POI:
  *     - Use the dinitz algorithm to get the sensor-disjoint paths that yield max-flow between the POI and the SINK.
- *     - Store the paths for later reuse.
- * Start an array of required connectivity for each POI, each with the value m.
- * While there are still positive values in this array (thus, while there are POIs that still do not meet the m-connectivity requirement):
- *     - For each path that was not included in the result
- *         - Count how many POIs (that still don't meet the m-connectivity requirement) that are covered by the path
- *         - Select the path that covers the most POIs (that still don't meet the m-connectivity requirement) and add it to the solution
- *             - If there are two candidates that cover the same highest number of POIs, select the shortest path
- *                 - If there is still a tie, choose arbitrarily
- * Then, make a second loop checking each path that was not included in the result
- *     - If the path is not longer than the longest path in the solution, add it to the solution
+ *     - For every path found between the POI and the SINK:
+ *         - Store the path for later usage
+ *             - For every sensor in the path
+ *                 - For every POI covered by that sensor
+ *                     - Add the path to the set of paths that cover this POI
+ *                     - Add the POI to the set of POIs covered by this path
+ * Start an array of the current connectivity of each POI, initially set to 0.
+ * While there is still a POI in the connectivity array with a value less than m:
+ *     - For each POI with less than m connectivity:
+ *         - For each path that is not in the current solution and has a sensor that covers the POI:
+ *             - Add one vote to the path
+ *     - Select the path with the most votes and add it to the solution
+ *         - In case of a tie, get the shortest path
+ *             - In case of another tie, choose arbitrarily
+ *     - Update the current connectivity of each POI that is covered by the chosen path
+ * Count the number of sensors in the solution - this is size S
+ * For every path not yet in the solution
+ *     - If the number of sensors in the solution got to 2*S, stop the iteration
+ *     - If the path is no longer than the shortest path already in the solution
+ *         - Add the path to the solution
  * Use AdKCov to add sensors to the solution until every POI has enough coverage.
- * The sensors in the paths chosen, plus the added sensors for k-coverage, might contain alternatives that might belong to a better solution than the REUSE heuristic, in further optimization steps.
+ * The sensors in the paths chosen, plus the added sensors for k-coverage, are the heuristically-chosen minimal set.
  */
 int KCMC_Instance::dinitz_breadth(const int k, const int m, std::unordered_set<int> &inactive_sensors, std::unordered_set<int> &solution) {
 
     // Local buffers
-    int poi, sentinel, num_path, path_covered_pois, best_path_num, best_path_coverage, best_path_length, pre_k_cov_sensors, longest_path_length=0;
-    std::vector<int> path;
-    std::unordered_set<int> ignore_path, used_paths;
+    bool connectivity_is_sufficient;
+    int poi, sentinel, pre_k_cov_sensors, num_path, a_sensor, a_poi, best_path_idx, best_path_votes, best_path_length, shortest_chosen_path_length, starting_size;
+    std::vector<int> current_connectivity, votes;
     std::vector<std::vector<int>> poi_paths, all_paths;
-    std::unordered_map<int, int> required_connectivity, added_connectivity;
+    std::unordered_map<int, std::unordered_set<int>> poi_is_covered_by_paths, path_cover_pois;
+    std::unordered_set<int> used_paths;
 
     // For each POI
     all_paths.clear();
@@ -231,107 +241,91 @@ int KCMC_Instance::dinitz_breadth(const int k, const int m, std::unordered_set<i
         if (sentinel != -1) {throw std::runtime_error("Failed to find " + std::to_string(m) + " paths! And we obtained no more information!");}
         if (poi_paths.size() < m) {throw std::runtime_error("Failed to find " + std::to_string(m) + " paths! And we obtained no more information!");}
 
-        // Add each path to the collection of all paths
-        for (const auto &path : poi_paths) {
-            all_paths.push_back(path);
-        }
-    }
+        // Add each path to the list of all paths
+        for (num_path = 0; num_path < poi_paths.size(); ++num_path) {
+            all_paths.push_back(poi_paths[num_path]);
 
-    // Start the buffer of POIs that need connectivity (initially all POIs require full connectivity)
-    for (poi = 0; poi < this->num_pois; ++poi) {required_connectivity[poi] = m;}
+            // For every sensor in the path, note which POIs it covers
+            sentinel = all_paths.size() - 1;
+            for (a_sensor = 0; a_sensor < poi_paths[num_path].size(); ++a_sensor) {
+                for (const int a_poi : this->sensor_poi[poi_paths[num_path][a_sensor]]) {
 
-    // While there are still POIs that do not meet the m-connectivity requirement
-    while (!required_connectivity.empty()) {
-        added_connectivity.clear();
+                    // Add the a_poi to the list of POIs covered by this path
+                    path_cover_pois[sentinel].insert(a_poi);
 
-        // For every path returned
-        for (num_path = 0; num_path < ((int)all_paths.size()); ++num_path) {
-            if (isin(ignore_path, num_path)) {continue;}
-            if (isin(used_paths, num_path)) {continue;}
-            path = all_paths[num_path];
-
-            // For every sensor in the path, add the number of POIs it covers (only POIs that still require connectivity)
-            path_covered_pois = 0;
-            for (const auto &sensor : path) {
-                if (isin(inactive_sensors, sensor)) {throw std::runtime_error("Inactive sensor found in path!");}
-                path_covered_pois += ((int)set_intersection(this->sensor_poi[sensor], required_connectivity).size());
-            }
-
-            // If the path does not adds any connectivity, add it to the list of ignored paths.
-            // If it does add connectivity, add it to the list of candidate paths.
-            if (path_covered_pois == 0) {ignore_path.insert(num_path);}
-            else {added_connectivity[num_path] = path_covered_pois;}
-        }
-
-        // Get the best path based on the number of POIs it covers, and its length (prefer shorter paths in case of ties)
-        best_path_num = -1;
-        best_path_coverage = -1;
-        best_path_length = LARGE_NUMBER;
-        for (const auto &entry : added_connectivity) {
-            num_path = entry.first;
-            path_covered_pois = entry.second;
-            path = all_paths[num_path];
-
-            // If the current path has better coverage, or, having the same coverage, is shorter, pick it
-            // The first path found will always be picked
-            if (
-                (path_covered_pois > best_path_coverage)
-             || (
-                    (path_covered_pois == best_path_coverage)
-                 && (((int)path.size()) < best_path_length)
-                )
-            ) {
-                best_path_num = num_path;
-                best_path_coverage = path_covered_pois;
-                best_path_length = ((int)path.size());
-            }
-        }
-        if (best_path_num == -1) {throw std::runtime_error("No valid path found!");}
-
-        // Mark the best path as already included in the result
-        ignore_path.insert(best_path_num);
-        used_paths.insert(best_path_num);
-
-        // Update the required connectivity based on the best path
-        path = all_paths[best_path_num];
-        for (const auto &sensor : path) {
-            for (const auto &poi : this->sensor_poi[sensor]) {
-
-                // If the POI requires connectivity, update it
-                if (isin(required_connectivity, poi)) {
-                    required_connectivity[poi] -= 1;
+                    // Add the path to the list of paths that cover this a_poi
+                    poi_is_covered_by_paths[a_poi].insert(sentinel);
                 }
+            }
 
-                // Remove POIs that no longer require connectivity
-                if (required_connectivity[poi] <= 0) {required_connectivity.erase(poi);}
+            // Sanity checks. This path must cover the poi that found it and vice versa
+            if (!isin(path_cover_pois[sentinel], poi)) {throw std::runtime_error("Path " + std::to_string(sentinel) + " does not cover POI " + std::to_string(poi));}
+            if (!isin(poi_is_covered_by_paths[poi], sentinel)) {throw std::runtime_error("POI " + std::to_string(poi) + " is not covered by path " + std::to_string(sentinel));}
+        }
+    }
+
+    // Prepare the buffers
+    solution.clear();
+    used_paths.clear();
+    current_connectivity.resize(this->num_pois, 0);
+    connectivity_is_sufficient = false;
+    shortest_chosen_path_length = LARGE_NUMBER;  // Amongst all POIs
+
+    // While we still don't have enough connectivity for all POIs
+    while (!connectivity_is_sufficient) {
+
+        // Reset the voting tally and pointers
+        votes.resize(all_paths.size(), 0);
+        best_path_idx = -1;
+        best_path_votes = 1;
+        best_path_length = LARGE_NUMBER;
+        connectivity_is_sufficient = true;  // Will be set to false if this is not true
+
+        // For each POI that doesn't have enough connectivity
+        for (poi = 0; poi < this->num_pois; ++poi) {
+            if (current_connectivity[poi] < m) {
+                connectivity_is_sufficient = false;  // A single POI with insufficient connectivity makes this variable false
+
+                // For each path that covers this POI and is not yet used in the solution
+                for (const int num_path : poi_is_covered_by_paths[poi]) {
+                    if (!isin(used_paths, num_path)) {
+
+                        // Add one vote for this path
+                        votes[num_path]++;
+                    }
+                }
             }
         }
 
-        // Update the longest path length if the current best path is longer
-        longest_path_length = std::max(longest_path_length, (int)path.size());
+        // Get the best path
+        for (num_path = 0; num_path < (int)all_paths.size(); ++num_path) {
+            if (isin(used_paths, num_path)) {continue;}  // Skip paths that are already used
+
+            // If either the current path had more votes than the current best, or it had the same number of votes but is shorter, choose it as the best path
+            if (votes[num_path] > best_path_votes || ((votes[num_path] == best_path_votes) && ((int)all_paths[num_path].size()) < best_path_length)) {
+                best_path_idx = num_path;
+                best_path_votes = votes[num_path];
+                best_path_length = (int)all_paths[num_path].size();
+                if (best_path_length < shortest_chosen_path_length) {shortest_chosen_path_length = best_path_length;}
+            }
+        }
+        if (best_path_idx == -1) {throw std::runtime_error("No valid path found");}
+
+        // Add the best path to the solution
+        used_paths.insert(best_path_idx);
+        for (const int a_sensor : all_paths[best_path_idx]) {solution.insert(a_sensor);}
+
+        // Increase the connectivity of all POIs covered by the best path
+        for (const int a_poi : path_cover_pois[best_path_idx]) {current_connectivity[a_poi]++;}
     }
 
-    // Here, we ALREADY have the required connectivity for all POIs
-    // But we want EVEN MORE paths, just so that further connectivity improvements can be made, by subsequent optimization steps
-    // However, we won't add just any paths to this result. We will add only paths that are not longer than the longest path found so far
-
-    // For every path returned, that was not already included in the result
-    for (num_path = 0; num_path < ((int)all_paths.size()); ++num_path) {
-        if (isin(ignore_path, num_path)) {continue;}
-        if (isin(used_paths, num_path)) {continue;}
-        path = all_paths[num_path];
-
-        // If the path is not longer than the longest path found so far, add it to the result
-        if (((int)path.size()) > longest_path_length) {continue;}
-        used_paths.insert(num_path);
-    }
-
-    // Here, every POI has the required connectivity and we even have some extra paths!
-    // Add all the sensors of every used path to the solution
-    solution.clear();
-    for (const auto &path_num : used_paths) {
-        for (const auto &sensor : all_paths[path_num]) {
-            solution.insert(sensor);
+    // Add all paths not yet in the solution that are no longer than the shortest chosen path
+    starting_size = (int)solution.size();
+    for (num_path = 0; num_path < (int)all_paths.size(); ++num_path) {
+        if ((!isin(used_paths, num_path)) && (((int)all_paths[num_path].size()) <= shortest_chosen_path_length)) {
+            used_paths.insert(num_path);
+            for (const int a_sensor : all_paths[num_path]) {solution.insert(a_sensor);}
+            if (((int)solution.size()) >= (2*starting_size)){break;}
         }
     }
 

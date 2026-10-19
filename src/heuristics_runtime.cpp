@@ -21,7 +21,7 @@
 
 
 void printout_short(
-    const bool is_valid,
+    const bool should_raise,
     KCMC_Instance *instance,
     const int kcmc_k,
     const int kcmc_m,
@@ -45,16 +45,26 @@ void printout_short(
     // - The amount of microsseconds the method needed to run
     // - The number of used installation spots
     // - The resulting map of the instance, as a binary of num_sensors bits
-    out << (is_valid ? "OK" : "INVALID") << "\t"
-        << instance->key() << "\t"
+    out << instance->key() << "\t"
         << kcmc_k << "\t" << kcmc_m
         << "\t" << name_of_applied_heuristic
         << "\t" << duration
         << "\t" << heuristic_solution.size()
         << "\t";
     for (const int i : used_sensors) {out << " " << i;}
-    // Flush
-    std::cout << out.str() << std::endl;
+    out << "\t";
+    // Flush up to this point
+    std::cout << out.str();
+
+    // Re-Validate the instance
+    std::unordered_set<int> solution_inactive_sensors;
+    for (int sensor=0; sensor < instance->num_sensors; sensor++) {
+        if (!isin(heuristic_solution, sensor)) {
+            solution_inactive_sensors.insert(sensor);
+        }
+    }
+    bool is_valid = instance->validate(should_raise, kcmc_k, kcmc_m, solution_inactive_sensors, false);
+    std::cout << (is_valid ? "VALID" : "INVALID") << std::endl;
 }
 
 
@@ -99,8 +109,17 @@ int main(int argc, char* const argv[]) {
     // Buffers
     int p, s, k, area_s, cov_v, com_r, kcmc_k, kcmc_m, arg_index;
     long long seed;
+    bool should_raise = false;
     std::unordered_set<int> inactive_sensors, solution, solution_inactive_sensors;
     KCMC_Instance* instance = nullptr;
+
+    // Prepare the clock buffers
+    using RuntimeClock = std::chrono::steady_clock;
+    using MicrosRep = std::chrono::microseconds::rep;
+
+    auto start = RuntimeClock::now();
+    auto end = RuntimeClock::now();
+    MicrosRep duration = 0;
 
     p = atoi(argv[1]);
     if (p == 0) {
@@ -110,6 +129,10 @@ int main(int argc, char* const argv[]) {
         instance = new KCMC_Instance("KCMC;1 6 1;10 4 6;0;PS;0 0;0 2;SS;0 1;0 4;2 3;4 5;1 3;SK;1 0;5 0;");
 
     } else {
+        if (p < 0) {
+            p = -1*p;
+            should_raise = true;
+        }
         s = atoi(argv[2]);
         k = atoi(argv[3]);
         if (p <= 0 || s <= 0 || k <= 0) {throw std::invalid_argument("Invalid Pois, Sensors or Sinks parameters.");}
@@ -133,85 +156,61 @@ int main(int argc, char* const argv[]) {
         );
     }
 
-    // Prepare the clock buffers
-    auto start = std::chrono::high_resolution_clock::now();
-    auto end = std::chrono::high_resolution_clock::now();
-    long duration;
-
     // Print the header
     //printf("IsValid\nInstance\tKCMC_K\tKCMC_M\tHeuristicMethod\tRuntime\tNumSensorsUsed\tUsedSensors\n");
 
     // GREEDY =====================================================================================
     // Run the three GREEDY heuristics and validate the results before printing out.
-    // The results must be inverted for validation, because validation asks for the set of inactive sensors rather than the set of active sensors.
 
     // GREEDY DKOV
     solution.clear();
-    start = std::chrono::high_resolution_clock::now();
+    start = RuntimeClock::now();
     instance->greedy_dkov(kcmc_k, kcmc_m, inactive_sensors, solution);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    // Invert, validate and printout the results
-    instance->invert_set(solution, solution_inactive_sensors);
-    printout_short(instance->validate(false, kcmc_k, kcmc_m, solution_inactive_sensors, false),
-                   instance, kcmc_k, kcmc_m, "greedy_dkov", duration, solution);
+    end = RuntimeClock::now();
+    duration = std::max<MicrosRep>(0, std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+    printout_short(should_raise, instance, kcmc_k, kcmc_m, "greedy_dkov", duration, solution);
 
     // GREEDY REUSE
     solution.clear();
-    start = std::chrono::high_resolution_clock::now();
+    start = RuntimeClock::now();
     instance->greedy_reuse(kcmc_k, kcmc_m, inactive_sensors, solution);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    // Invert, validate and printout the results
-    instance->invert_set(solution, solution_inactive_sensors);
-    printout_short(instance->validate(false, kcmc_k, kcmc_m, solution_inactive_sensors, false),
-                   instance, kcmc_k, kcmc_m, "greedy_reuse", duration, solution);
+    end = RuntimeClock::now();
+    duration = std::max<MicrosRep>(0, std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+    printout_short(should_raise, instance, kcmc_k, kcmc_m, "greedy_reuse", duration, solution);
 
     // GREEDY BREADTH
     solution.clear();
-    start = std::chrono::high_resolution_clock::now();
+    start = RuntimeClock::now();
     instance->greedy_breadth(kcmc_k, kcmc_m, inactive_sensors, solution);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    // Invert, validate and printout the results
-    instance->invert_set(solution, solution_inactive_sensors);
-    printout_short(instance->validate(false, kcmc_k, kcmc_m, solution_inactive_sensors, false),
-                   instance, kcmc_k, kcmc_m, "greedy_breadth", duration, solution);
+    end = RuntimeClock::now();
+    duration = std::max<MicrosRep>(0, std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+    printout_short(should_raise, instance, kcmc_k, kcmc_m, "greedy_breadth", duration, solution);
 
     // DINITZ =====================================================================================
 
     // DINITZ DKOV
     solution.clear();
-    start = std::chrono::high_resolution_clock::now();
+    start = RuntimeClock::now();
     instance->dinitz_dkov(kcmc_k, kcmc_m, inactive_sensors, solution);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    // Invert, validate and printout the results
-    instance->invert_set(solution, solution_inactive_sensors);
-    printout_short(instance->validate(false, kcmc_k, kcmc_m, solution_inactive_sensors, false),
-                   instance, kcmc_k, kcmc_m, "dinitz_dkov", duration, solution);
+    end = RuntimeClock::now();
+    duration = std::max<MicrosRep>(0, std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+    printout_short(should_raise, instance, kcmc_k, kcmc_m, "dinitz_dkov", duration, solution);
 
     // DINITZ REUSE
     solution.clear();
-    start = std::chrono::high_resolution_clock::now();
+    start = RuntimeClock::now();
     instance->dinitz_reuse(kcmc_k, kcmc_m, inactive_sensors, solution);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    // Invert, validate and printout the results
-    instance->invert_set(solution, solution_inactive_sensors);
-    printout_short(instance->validate(false, kcmc_k, kcmc_m, solution_inactive_sensors, false),
-                   instance, kcmc_k, kcmc_m, "dinitz_reuse", duration, solution);
+    end = RuntimeClock::now();
+    duration = std::max<MicrosRep>(0, std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+    printout_short(should_raise, instance, kcmc_k, kcmc_m, "dinitz_reuse", duration, solution);
 
     // DINITZ BREADTH
     solution.clear();
-    start = std::chrono::high_resolution_clock::now();
+    start = RuntimeClock::now();
     instance->dinitz_breadth(kcmc_k, kcmc_m, inactive_sensors, solution);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    // Invert, validate and printout the results
-    instance->invert_set(solution, solution_inactive_sensors);
-    printout_short(instance->validate(false, kcmc_k, kcmc_m, solution_inactive_sensors, false),
-                   instance, kcmc_k, kcmc_m, "dinitz_breadth", duration, solution);
+    end = RuntimeClock::now();
+    duration = std::max<MicrosRep>(0, std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+    printout_short(should_raise, instance, kcmc_k, kcmc_m, "dinitz_breadth", duration, solution);
 
     return 0;
 }

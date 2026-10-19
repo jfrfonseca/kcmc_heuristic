@@ -28,8 +28,8 @@ target_link_libraries(instance_validator KCMC_Module)
 ADD_EXECUTABLE(isomorphism_validator src/isomorphism_validator.cpp)
 target_link_libraries(isomorphism_validator KCMC_Module)
 
-#ADD_EXECUTABLE(photogenic_instance_generator src/photogenic_instance_generator.cpp)
-#target_link_libraries(photogenic_instance_generator KCMC_Module)
+ADD_EXECUTABLE(instance_visualizer src/instance_visualizer.cpp)
+target_link_libraries(instance_visualizer KCMC_Module)
 
 
 # Optimizers (DINITZ) --------------------------------------------------------

@@ -200,7 +200,9 @@ class KCMC_Result:
     def parse_presolve(gurobi_log):
 
         # Initial values
-        ini_rows, ini_cols, ini_n0, _, ini_cont, ini_int, ini_bin = PRESOLVE_REGEX_1.search(gurobi_log).groups()
+        findings = PRESOLVE_REGEX_1.search(gurobi_log)
+        assert findings is not None
+        ini_rows, ini_cols, ini_n0, _, ini_cont, ini_int, ini_bin = findings.groups()
 
         # Values and presolve
         match_2 = PRESOLVE_REGEX_2.search(gurobi_log)
@@ -212,6 +214,7 @@ class KCMC_Result:
             gurobi_heuristic_objective_value = None
         else:
             match_2 = PRESOLVE_REGEX_3.search(gurobi_log)
+            assert match_2 is not None
             prem_rows, prem_cols, pre_t, \
             end_rows, end_cols, end_n0, \
             gurobi_heuristic_objective_value, \
@@ -234,7 +237,7 @@ class KCMC_Result:
 
 
 def gurobi_multi_flow(kcmc_k:int, kcmc_m:int, kcmc_instance:KCMC_Instance, time_limit=60, threads=1, LOGFILE=None,
-                      y_binary=True) -> (GurobiModelWrapper, Any, Any):
+                      y_binary=True) -> tuple[GurobiModelWrapper, Any, Any]:
 
     # Prepare the model object, using the wrapper
     model_mf = GurobiModelWrapper('KCMC MULTI-FLOW', kcmc_k, kcmc_m, kcmc_instance, time_limit, threads, LOGFILE)
@@ -308,7 +311,7 @@ def gurobi_multi_flow(kcmc_k:int, kcmc_m:int, kcmc_instance:KCMC_Instance, time_
 
     # K-Coverage ------------------------------------------
     k_coverage = model_mf.add_constraints(
-        (gp.quicksum(X.select(iC[p], '*')) >= kcmc_k
+        (gp.quicksum(X.select(list(iC[p]), '*')) >= kcmc_k
          for p in P),
         name="k_coverage"
     )
@@ -324,7 +327,7 @@ def gurobi_multi_flow(kcmc_k:int, kcmc_m:int, kcmc_instance:KCMC_Instance, time_
 
 
 def gurobi_single_flow(kcmc_k:int, kcmc_m:int, kcmc_instance:KCMC_Instance, time_limit=60, threads=1, LOGFILE=None,
-                       y_binary=True) -> (GurobiModelWrapper, Any, Any):
+                       y_binary=True) -> tuple[GurobiModelWrapper, Any, Any]:
 
     # Prepare the model object, using the wrapper
     model_sf = GurobiModelWrapper('KCMC SINGLE-FLOW', kcmc_k, kcmc_m, kcmc_instance, time_limit, threads, LOGFILE)
@@ -387,7 +390,7 @@ def gurobi_single_flow(kcmc_k:int, kcmc_m:int, kcmc_instance:KCMC_Instance, time
 
     # K-Coverage ------------------------------------------
     k_coverage = model_sf.add_constraints(
-        (gp.quicksum(X.select(iC[p], '*')) >= kcmc_k
+        (gp.quicksum(X.select(list(iC[p]), '*')) >= kcmc_k
          for p in P),
         name="k_coverage"
     )

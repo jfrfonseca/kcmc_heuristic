@@ -309,17 +309,6 @@ std::string KCMC_Instance::serialize() {
 }
 
 
-int KCMC_Instance::invert_set(std::unordered_set<int> &source_set, std::unordered_set<int> &target_set) {
-    target_set.clear();
-    for (int i=0; i<this->num_sensors; i++) {
-        if (!isin(source_set, i)) {
-            target_set.insert(i);
-        }
-    }
-    return target_set.size();
-}
-
-
 std::string KCMC_Instance::to_sif(std::unordered_set<int> &inactive_sensors) {
     std::string output = "";
 
@@ -442,31 +431,29 @@ bool KCMC_Instance::validate(const bool raise, const int k, const int m,
                              std::unordered_set<int> &k_used_sensors,
                              std::unordered_set<int> &m_used_sensors,
                              bool use_greedy) {
-    int valid;
+    int valid, invalid_poi, invalid_result;
     std::string key = this->key(), notice;
     if (use_greedy) { notice = "GREEDY"; } else { notice = "DINITZ"; }
 
     // Check validity, recovering the used sensors for K coverage and M connectivity
-    try {
-        valid = this->k_coverage(k, inactive_sensors, k_used_sensors);
-        if (valid != INVALID_PREVIOUS_POI) { throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT COVERAGE '" + notice + "')"); }
-    }
-    catch (const std::exception &exc) {
-        if (raise) {throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT COVERAGE '" + notice + "')");}
-        else {return false;}
+    valid = this->k_coverage(k, inactive_sensors, k_used_sensors);
+    if (valid != INVALID_PREVIOUS_POI) {
+        if (!raise) { return false; }
+        invalid_poi = (int)(valid / LARGE_NUMBER);
+        invalid_result = (int)(valid % LARGE_NUMBER);
+        throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT COVERAGE '" + notice + "' -> p" + std::to_string(invalid_poi) + " / k" + std::to_string(invalid_result) + ")");
     }
 
-    try {
-        if (use_greedy) {
-            valid = this->m_connectivity_greedy(m, inactive_sensors, m_used_sensors);
-        } else {
-            valid = this->m_connectivity(m, inactive_sensors, m_used_sensors);
-        }
-        if (valid != INVALID_PREVIOUS_POI) { throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT CONNECTIVITY '" + notice + "')"); }
+    if (use_greedy) {
+        valid = this->m_connectivity_greedy(m, inactive_sensors, m_used_sensors);
+    } else {
+        valid = this->m_connectivity(m, inactive_sensors, m_used_sensors);
     }
-    catch (const std::exception &exc) {
-        if (raise) {throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT CONNECTIVITY '" + notice + "')");}
-        else {return false;}
+    if (valid != INVALID_PREVIOUS_POI) {
+        if (!raise) { return false; }
+        invalid_poi = (int)(valid / LARGE_NUMBER);
+        invalid_result = (int)(valid % LARGE_NUMBER);
+        throw std::runtime_error("INVALID INSTANCE " + key + "! (INSUFFICIENT CONNECTIVITY '" + notice + "' -> p" + std::to_string(invalid_poi) + " / f" + std::to_string(invalid_result) + ")");
     }
     return true;
 }

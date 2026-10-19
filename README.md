@@ -68,6 +68,43 @@ The no-possible-isomorphism validation is easy - we count how many vertices of e
 It is important to say that two instances having the same profile does not necessarily mean they are isomorphic, but if the profiles are different, it necessarily means the instances are not isomorphic.
 
 
+## Heuristics
+
+Run the heuristics locally with the following commands:
+
+```bash
+docker compose run heuristics
+docker compose down
+```
+
+## Fix-And-Optimize (Locally)
+
+Run the fix-and-optimize locally with the following commands:
+
+```bash
+docker compose run fix_and_optimize
+docker compose down
+```
+
+## In production, the heuristics should be run directly in a Debian-based LINUX environment, with the following command:
+
+At the root of the project directory, run the following command to execute the heuristics:
+```bash
+sed -e 's/^KCKC//' \
+    -e 's/END$//' \
+    -e 's/;/ /g' \
+    -e 's/[|()]//g' \
+    -e 's/[KCMEND]/ /g' \
+    -e 's/[[:space:]]\+/ /g' -e 's/^ //; s/ $//' \
+    data/instances.csv \
+    | xargs -r -L1 builds/heuristics \
+    > data/heuristics_results.tsv
+```
+
+
+
+
+
 ## APPENDIX
 General Information
 

@@ -20,3 +20,6 @@ sed -e 's/^KCKC//' \
     /data/instances.csv \
     | xargs -r -L1 /app/instance_validator \
     > /data/instances_validated.csv
+
+# Create all the visualizations for the instances
+/app/instance_visualizer /data/instances.csv

@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CX2 Instance Viewer</title>
+  <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+  <style>
+    :root {
+      font-family: Arial, sans-serif;
+      color-scheme: light dark;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      background: #101420;
+      color: #e6edf3;
+    }
+
+    .menu {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #30363d;
+      background: #161b22;
+      flex-wrap: wrap;
+    }
+
+    .menu label {
+      font-weight: 600;
+    }
+
+    button {
+      border: 1px solid #30363d;
+      background: #0d1117;
+      color: #e6edf3;
+      border-radius: 6px;
+      padding: 0.45rem 0.6rem;
+      font-size: 0.95rem;
+    }
+
+    .instance-name {
+      min-width: 280px;
+      max-width: 540px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.95rem;
+      color: #c9d1d9;
+    }
+
+    input[type="range"] {
+      accent-color: #58a6ff;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: #58a6ff;
+    }
+
+    #cy {
+      width: 100%;
+      height: 100%;
+      min-height: 420px;
+    }
+
+    .status {
+      border-top: 1px solid #30363d;
+      background: #161b22;
+      padding: 0.6rem 1rem;
+      font-size: 0.92rem;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="menu">
+    <label for="instanceName">Instance:</label>
+    <span id="instanceName" class="instance-name">No file loaded</span>
+    <label for="scaleRange">Scale:</label>
+    <input id="scaleRange" type="range" min="0.6" max="10" step="0.1" value="1">
+    <span id="scaleValue">1.0x</span>
+    <button id="openFileBtn" type="button">Open .cx2 file</button>
+    <button id="toggleInactiveEdgesBtn" type="button">Hide inactive-sensor edges</button>
+    <input id="fileInput" type="file" accept=".cx2,.json,application/json" hidden>
+  </div>
+
+  <div id="cy"></div>
+  <div id="status" class="status">Initializing viewer...</div>
+
+  <script>
+    const CY2_CANDIDATE_KEYS = ['nodes', 'edges', 'cartesianLayout', 'nodeCoordinates'];
+    const SENSOR_SIZE = 16;
+    const POI_SIZE = SENSOR_SIZE * 2;
+    const SINK_SIZE = POI_SIZE;
+    const ARROW_HEAD_TARGET_SIZE = SENSOR_SIZE * 0.25;
+    const CYTOSCAPE_DEFAULT_ARROW_SIZE = 6;
+    const EDGE_ARROW_SCALE = ARROW_HEAD_TARGET_SIZE / CYTOSCAPE_DEFAULT_ARROW_SIZE;
+
+    const statusEl = document.getElementById('status');
+    const instanceNameEl = document.getElementById('instanceName');
+    const openFileBtn = document.getElementById('openFileBtn');
+    const toggleInactiveEdgesBtn = document.getElementById('toggleInactiveEdgesBtn');
+    const fileInput = document.getElementById('fileInput');
+    const scaleRange = document.getElementById('scaleRange');
+    const scaleValue = document.getElementById('scaleValue');
+    let basePositions = null;
+    let activeScale = Number(scaleRange.value) || 1;
+    let hideInactiveSensorEdges = false;
+
+    const cy = cytoscape({
+      container: document.getElementById('cy'),
+      elements: [],
+      style: [
+        {
+          selector: 'node',
+          style: {
+            label: 'data(label)',
+            'text-wrap': 'wrap',
+            'text-max-width': 120,
+            'font-size': 10,
+            'text-halign': 'center',
+            'text-valign': 'center',
+            'text-outline-width': 2,
+            'text-outline-color': '#0d1117',
+            color: '#ffffff',
+            'background-color': '#1f6feb',
+            shape: 'ellipse',
+            width: SENSOR_SIZE,
+            height: SENSOR_SIZE
+          }
+        },
+        {
+          selector: 'node[nodeType = "POI"]',
+          style: {
+            'background-color': '#2ea043',
+            shape: 'ellipse',
+            width: POI_SIZE,
+            height: POI_SIZE
+          }
+        },
+        {
+          selector: 'node[nodeType = "SENSOR"]',
+          style: {
+            'background-color': '#1f6feb',
+            shape: 'ellipse',
+            width: SENSOR_SIZE,
+            height: SENSOR_SIZE
+          }
+        },
+        {
+          selector: 'node[nodeType = "SINK"]',
+          style: {
+            'background-color': '#f85149',
+            shape: 'rectangle',
+            width: SINK_SIZE,
+            height: SINK_SIZE
+          }
+        },
+        {
+          selector: 'node[status = "inactive"]',
+          style: {
+            'background-color': '#8b949e',
+            'text-outline-color': '#484f58'
+          }
+        },
+        {
+          selector: 'edge',
+          style: {
+            width: 0.9,
+            label: 'data(label)',
+            'font-size': 8,
+            color: '#b1bac4',
+            'line-color': '#b1bac4',
+            'target-arrow-color': '#b1bac4',
+            'target-arrow-shape': 'triangle',
+            'arrow-scale': EDGE_ARROW_SCALE,
+            'curve-style': 'bezier'
+          }
+        },
+        {
+          selector: 'edge.hidden-by-inactive-sensor-toggle',
+          style: {
+            display: 'none'
+          }
+        }
+      ],
+      layout: { name: 'grid', fit: true, padding: 25 }
+    });
+
+    function setStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    function updateScaleLabel(value) {
+      scaleValue.textContent = `${value.toFixed(1)}x`;
+    }
+
+    function updateInactiveEdgeToggleLabel() {
+      toggleInactiveEdgesBtn.textContent = hideInactiveSensorEdges
+        ? 'Show inactive-sensor edges'
+        : 'Hide inactive-sensor edges';
+    }
+
+    function updateInactiveSensorEdgeVisibility() {
+      cy.edges().removeClass('hidden-by-inactive-sensor-toggle');
+      if (!hideInactiveSensorEdges) return;
+
+      const inactiveSensorIds = new Set(
+        cy.nodes('[nodeType = "SENSOR"][status = "inactive"]').map((node) => node.id())
+      );
+      if (inactiveSensorIds.size === 0) return;
+
+      cy.edges().forEach((edge) => {
+        const sourceId = edge.source().id();
+        const targetId = edge.target().id();
+        if (inactiveSensorIds.has(sourceId) || inactiveSensorIds.has(targetId)) {
+          edge.addClass('hidden-by-inactive-sensor-toggle');
+        }
+      });
+    }
+
+    function applyScaleToLayout(scale) {
+      if (!basePositions || basePositions.length === 0) return;
+
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+
+      for (const pos of basePositions) {
+        if (pos.x < minX) minX = pos.x;
+        if (pos.x > maxX) maxX = pos.x;
+        if (pos.y < minY) minY = pos.y;
+        if (pos.y > maxY) maxY = pos.y;
+      }
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      cy.nodes().positions((node, index) => {
+        const base = basePositions[index];
+        const dx = base.x - centerX;
+        const dy = base.y - centerY;
+        return {
+          x: centerX + (dx * scale),
+          y: centerY + (dy * scale)
+        };
+      });
+
+      cy.fit(cy.elements(), 25);
+    }
+
+    function captureBasePositions() {
+      basePositions = cy.nodes().map((node) => {
+        const pos = node.position();
+        return { x: pos.x, y: pos.y };
+      });
+    }
+
+    function normalizeCx2(raw) {
+      if (!raw || typeof raw !== 'object') {
+        throw new Error('Unsupported instance format: expected JSON object or array');
+      }
+
+      if (Array.isArray(raw)) {
+        const merged = {};
+        for (const entry of raw) {
+          if (entry && typeof entry === 'object') {
+            for (const [key, value] of Object.entries(entry)) {
+              if (CY2_CANDIDATE_KEYS.includes(key) || !Object.prototype.hasOwnProperty.call(merged, key)) {
+                merged[key] = value;
+              }
+            }
+          }
+        }
+        raw = merged;
+      }
+
+      const nodesRaw = Array.isArray(raw.nodes) ? raw.nodes : [];
+      const edgesRaw = Array.isArray(raw.edges) ? raw.edges : [];
+      const layoutRaw = Array.isArray(raw.cartesianLayout)
+        ? raw.cartesianLayout
+        : (Array.isArray(raw.nodeCoordinates) ? raw.nodeCoordinates : []);
+
+      const positions = new Map();
+      for (const item of layoutRaw) {
+        if (!item || typeof item !== 'object') continue;
+        const nodeId = item.node ?? item.nodeId ?? item.id ?? item['@id'];
+        if (nodeId === undefined || nodeId === null) continue;
+        const x = Number(item.x);
+        const y = Number(item.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        positions.set(String(nodeId), { x, y });
+      }
+
+      const elements = [];
+
+      for (const node of nodesRaw) {
+        const nodeId = node?.id ?? node?.['@id'] ?? node?.node;
+        if (nodeId === undefined || nodeId === null) continue;
+        const stringId = String(nodeId);
+        const nodeType = String(node?.v?.node_type ?? node?.node_type ?? '').toUpperCase();
+        const status = String(node?.v?.status ?? node?.status ?? '').toLowerCase();
+        const label =
+          node?.v?.name ??
+          node?.name ??
+          node?.n ??
+          node?.label ??
+          stringId;
+        const element = {
+          data: {
+            id: stringId,
+            label: String(label),
+            nodeType,
+            status
+          }
+        };
+        const pos = positions.get(stringId);
+        if (pos) {
+          element.position = pos;
+        } else {
+          const nodeX = Number(node?.x);
+          const nodeY = Number(node?.y);
+          if (Number.isFinite(nodeX) && Number.isFinite(nodeY)) {
+            element.position = { x: nodeX, y: nodeY };
+          }
+        }
+        elements.push(element);
+      }
+
+      for (const edge of edgesRaw) {
+        const edgeId = edge?.id ?? edge?.['@id'] ?? `${edge?.s ?? edge?.source}-${edge?.t ?? edge?.target}`;
+        const source = edge?.s ?? edge?.source;
+        const target = edge?.t ?? edge?.target;
+        if (source === undefined || target === undefined) continue;
+        const label = edge?.i ?? edge?.interaction ?? edge?.label ?? '';
+        elements.push({
+          data: {
+            id: String(edgeId),
+            source: String(source),
+            target: String(target),
+            label: String(label)
+          }
+        });
+      }
+
+      return {
+        elements,
+        hasPositions: positions.size > 0
+      };
+    }
+
+    async function loadInstanceFromFile(file) {
+      setStatus(`Loading ${file.name} ...`);
+      const rawText = await file.text();
+      const data = JSON.parse(rawText.replace(/^\uFEFF/, ''));
+      renderGraph(data, file.name);
+    }
+
+    function renderGraph(rawData, sourceName) {
+      const { elements, hasPositions } = normalizeCx2(rawData);
+      cy.elements().remove();
+      cy.add(elements);
+      instanceNameEl.textContent = sourceName;
+
+      const layout = hasPositions
+        ? { name: 'preset', fit: true, padding: 25 }
+        : { name: 'cose', fit: true, padding: 25, animate: false };
+      cy.layout(layout).run();
+      captureBasePositions();
+      applyScaleToLayout(activeScale);
+      updateInactiveSensorEdgeVisibility();
+
+      const nodeCount = cy.nodes().length;
+      const edgeCount = cy.edges().length;
+      setStatus(`Loaded ${sourceName}\nNodes: ${nodeCount} | Edges: ${edgeCount}`);
+    }
+
+    function bindEvents() {
+      scaleRange.addEventListener('input', () => {
+        activeScale = Number(scaleRange.value) || 1;
+        updateScaleLabel(activeScale);
+        applyScaleToLayout(activeScale);
+      });
+
+      openFileBtn.addEventListener('click', () => {
+        fileInput.click();
+      });
+
+      toggleInactiveEdgesBtn.addEventListener('click', () => {
+        hideInactiveSensorEdges = !hideInactiveSensorEdges;
+        updateInactiveEdgeToggleLabel();
+        updateInactiveSensorEdgeVisibility();
+      });
+
+      fileInput.addEventListener('change', async (event) => {
+        const [file] = Array.from(event.target.files || []);
+        if (!file) return;
+        try {
+          await loadInstanceFromFile(file);
+        } catch (error) {
+          setStatus(`Error loading file:\n${error.message}`);
+        } finally {
+          fileInput.value = '';
+        }
+      });
+
+    }
+
+    async function init() {
+      updateScaleLabel(activeScale);
+      updateInactiveEdgeToggleLabel();
+      bindEvents();
+      setStatus('Click "Open .cx2 file" to load an instance.');
+    }
+
+    init().catch((error) => {
+      setStatus(`Initialization error:\n${error.message}`);
+    });
+  </script>
+</body>
+</html>

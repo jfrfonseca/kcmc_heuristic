@@ -60,15 +60,6 @@ int main(int argc, char* const argv[]) {
             seed
         );
 
-        // Convert the instance to cx2 format and save it in a file
-        file_name = "/data/cx2/kcmc_instance_" + std::to_string(p) + "_" + std::to_string(s) + "_" + std::to_string(k)
-                  + "_" + std::to_string(area_s) + "_" + std::to_string(cov_v) + "_" + std::to_string(com_r)
-                  + "_" + std::to_string(seed) + ".cx2";
-        std::ofstream cx2_file(file_name);
-        if (!cx2_file.is_open()) {throw std::runtime_error("Unable to open output file: " + file_name);}
-        cx2_file << instance->to_cx2();
-        cx2_file.close();
-
         // Get the rank of the instance
         total_rank = instance->rank(poi_rank, sensor_rank, sink_rank);
 
