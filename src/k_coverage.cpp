@@ -68,6 +68,16 @@ std::unordered_set<int> set_diff(const std::unordered_set<int> &left, const std:
     }
     return remainder;
 }
+std::unordered_set<int> set_diff(const std::vector<int> &left, const std::unordered_set<int> &right) {
+    auto rightend = right.end();
+    std::unordered_set<int> remainder;
+    for (const int &item : left) {
+        if (right.find(item) == rightend) { // If item NOT IN right side
+            remainder.insert(item);
+        }
+    }
+    return remainder;
+}
 
 
 /* SET INTERSECTION
@@ -92,7 +102,15 @@ std::unordered_set<int> set_intersection(const std::unordered_set<int> &left, co
     return intersection;
 }
 std::unordered_set<int> set_intersection(const std::unordered_map<int,int> &left, const std::unordered_set<int> &right) {return set_intersection(right, left);}
-
+std::unordered_set<int> set_intersection(const std::vector<int> &left, const std::vector<int> &right) {
+    std::unordered_set<int> intersection;
+    for (const int &item : left) {
+        if (std::find(right.begin(), right.end(), item) != right.end()) { // If item IN right side
+            intersection.insert(item);
+        }
+    }
+    return intersection;
+}
 
 /* DISTANCE
  * Distance between two components, overloaded for maximum re-usability

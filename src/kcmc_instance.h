@@ -112,10 +112,14 @@ void vote(std::unordered_map<int, int> &buffer, int target);
  */
 template<class T>
 T set_merge (T a, T b) {T t(a); t.insert(b.begin(),b.end()); return t;}
+
 std::unordered_set<int> set_diff(const std::unordered_set<int> &left, const std::unordered_set<int> &right);
+std::unordered_set<int> set_diff(const std::vector<int> &left, const std::unordered_set<int> &right);
+
 std::unordered_set<int> set_intersection(const std::unordered_set<int> &left, const std::unordered_set<int> &right);
 std::unordered_set<int> set_intersection(const std::unordered_set<int> &left, const std::unordered_map<int,int> &right);
 std::unordered_set<int> set_intersection(const std::unordered_map<int,int> &left, const std::unordered_set<int> &right);
+std::unordered_set<int> set_intersection(const std::vector<int> &left, const std::vector<int> &right);
 
 
 /* SETIFY
